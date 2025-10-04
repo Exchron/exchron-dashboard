@@ -15,14 +15,24 @@ function formatPercent(v: number | undefined) {
 export default function ResultsTab() {
 	const { predictions, inputRecords, status, error } = usePrediction();
 	// Derive aggregate metrics from first prediction (assuming per-row predictions)
-	const first = predictions[0];
+	const first = predictions[0] as any;
 	const prediction = first
 		? {
 				exoplanet: first.probability_confirmed,
 				not: first.probability_false_positive,
 				followUp: first.probability_confirmed > 0.5 ? 'High' : 'Low',
+				label: first.backend_label,
+				confidence: first.confidence,
+				threshold: first.threshold,
 		  }
-		: { exoplanet: 0, not: 0, followUp: '—' };
+		: {
+				exoplanet: 0,
+				not: 0,
+				followUp: '—',
+				label: null,
+				confidence: null,
+				threshold: 0.5,
+		  };
 	const types = [
 		{ label: 'Hot Jupiter', pct: 60, tone: 'text-[var(--success-color)]' },
 		{ label: 'Neptune-like', pct: 20, tone: 'text-[var(--muted-text)]' },
@@ -81,6 +91,17 @@ export default function ResultsTab() {
 										{prediction.followUp}
 									</p>
 								</div>
+								{prediction.label && (
+									<div className="bg-white rounded-lg border border-[var(--input-border)] flex flex-col items-center justify-center py-6 md:col-span-3 lg:col-span-3">
+										<p className="font-medium mb-2">Backend Label</p>
+										<p className="text-2xl font-semibold">{prediction.label}</p>
+										{prediction.confidence != null && (
+											<p className="text-xs mt-2 text-[var(--text-secondary)]">
+												Confidence: {formatPercent(prediction.confidence)}
+											</p>
+										)}
+									</div>
+								)}
 							</div>
 
 							{/* Exoplanet Type Distribution */}
