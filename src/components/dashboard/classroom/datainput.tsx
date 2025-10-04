@@ -1,0 +1,1359 @@
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { Card, CardTitle, CardContent } from '../../ui/Card';
+import Link from 'next/link';
+import Image from 'next/image';
+import {
+	getFeatureDescription,
+	getFeatureCategory,
+} from '../../../lib/keplerFeatureDescriptions';
+
+// Temporary types until imports are fixed
+type ColumnType = 'numeric' | 'categorical' | 'boolean' | 'datetime' | 'text';
+interface InferredColumnMeta {
+	name: string;
+	index: number;
+	inferredType: ColumnType;
+	uniqueValues?: string[];
+	min?: number;
+	max?: number;
+	mean?: number;
+	std?: number;
+	missingCount: number;
+}
+interface RawDataset {
+	name: string;
+	originalCSV: string;
+	rows: string[][];
+	header: string[];
+}
+
+export default function ClassroomDataInputTab() {
+	const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+	const [isUploading, setIsUploading] = useState(false);
+	const [isParsing, setIsParsing] = useState(false);
+	const [parseError, setParseError] = useState<string | null>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	// ML state
+	const [selectedDataSource, setSelectedDataSource] = useState('kepler');
+	const [rawDataset, setRawDataset] = useState<RawDataset | null>(null);
+	const [columnMeta, setColumnMeta] = useState<InferredColumnMeta[]>([]);
+	const [targetColumn, setTargetColumn] = useState<string>('');
+	const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+	const [showDataPreview, setShowDataPreview] = useState(false);
+
+	// CSV parsing utilities (inline for now)
+	const parseCSV = (
+		csvContent: string,
+	): { header: string[]; rows: string[][] } => {
+		const lines = csvContent.split('\n').filter((line) => line.trim() !== '');
+		if (lines.length === 0) throw new Error('CSV file is empty');
+
+		const header = lines[0].split(',').map((h) => h.trim().replace(/"/g, ''));
+		const rows = lines
+			.slice(1)
+			.map((line) =>
+				line.split(',').map((cell) => cell.trim().replace(/"/g, '')),
+			);
+
+		return { header, rows };
+	};
+
+	const inferColumnType = (values: string[]): ColumnType => {
+		if (values.length === 0) return 'text';
+
+		// Boolean detection
+		const booleanValues = new Set(['true', 'false', '1', '0', 'yes', 'no']);
+		const lowercaseValues = values.map((v) => v.toLowerCase());
+		if (lowercaseValues.every((v) => booleanValues.has(v))) {
+			return 'boolean';
+		}
+
+		// Numeric detection
+		const numericCount = values.filter((v) => {
+			const num = parseFloat(v);
+			return !isNaN(num) && isFinite(num);
+		}).length;
+
+		if (numericCount / values.length >= 0.8) {
+			return 'numeric';
+		}
+
+		// Categorical detection
+		const uniqueValues = new Set(values);
+		if (uniqueValues.size <= 30 && uniqueValues.size < values.length * 0.5) {
+			return 'categorical';
+		}
+
+		return 'text';
+	};
+
+	const analyzeDataset = (
+		header: string[],
+		rows: string[][],
+	): InferredColumnMeta[] => {
+		return header.map((name, index) => {
+			const values = rows
+				.map((row) => row[index] || '')
+				.filter((v) => v.trim() !== '');
+			const inferredType = inferColumnType(values);
+
+			const meta: InferredColumnMeta = {
+				name,
+				index,
+				inferredType,
+				missingCount: rows.length - values.length,
+			};
+
+			if (inferredType === 'numeric') {
+				const numericValues = values
+					.map((v) => parseFloat(v))
+					.filter((v) => !isNaN(v));
+				if (numericValues.length > 0) {
+					meta.min = Math.min(...numericValues);
+					meta.max = Math.max(...numericValues);
+					meta.mean =
+						numericValues.reduce((a, b) => a + b, 0) / numericValues.length;
+				}
+			} else if (inferredType === 'categorical') {
+				meta.uniqueValues = Array.from(new Set(values)).slice(0, 20);
+			}
+
+			return meta;
+		});
+	};
+
+	// Load real Kepler dataset
+	const loadKeplerDataset = async () => {
+		try {
+			setIsParsing(true);
+			const response = await fetch('/kepler_cleaned_28_features.csv');
+			if (!response.ok) {
+				throw new Error('Failed to load Kepler dataset');
+			}
+
+			const csvContent = await response.text();
+			const { header, rows } = parseCSV(csvContent);
+			const meta = analyzeDataset(header, rows);
+
+			const dataset: RawDataset = {
+				name: 'kepler_cleaned_28_features.csv',
+				originalCSV: csvContent,
+				rows: rows.slice(0, 1000), // Limit to first 1000 rows for performance
+				header,
+			};
+
+			setRawDataset(dataset);
+			const metaForLimitedRows = analyzeDataset(header, rows.slice(0, 1000));
+			setColumnMeta(metaForLimitedRows);
+			setShowDataPreview(true);
+
+			// Auto-select target and features for Kepler dataset
+			const targetCol = 'koi_disposition';
+			const features = [
+				'koi_period',
+				'koi_impact',
+				'koi_duration',
+				'koi_depth',
+				'koi_prad',
+				'koi_teq',
+				'koi_insol',
+				'koi_model_snr',
+				'koi_steff',
+				'koi_slogg',
+				'koi_srad',
+				'koi_kepmag',
+				'ra',
+				'dec',
+			];
+
+			setTargetColumn(targetCol);
+			setSelectedFeatures(features);
+		} catch (error) {
+			console.error('Kepler dataset loading error:', error);
+			setParseError(
+				'Failed to load Kepler dataset. Please try uploading your own data.',
+			);
+		} finally {
+			setIsParsing(false);
+		}
+	};
+
+	// Load sample dataset
+	const loadSampleDataset = async (source: string) => {
+		const sampleCSV = `planet_name,radius,mass,t_eff,logg,disposition
+KEPLER-1088.01,8,1.8,6129.0,4.24,CONFIRMED
+KEPLER-1089.01,5,0.9,5270.0,4.54,CANDIDATE
+KEPLER-108.01,3,0.6,4652.0,4.59,CONFIRMED
+KEPLER-110.01,7,1.5,5880.0,4.48,FALSE_POSITIVE
+KEPLER-111.01,4,0.8,5456.0,4.61,CONFIRMED
+KEPLER-112.01,6,1.2,6045.0,4.38,FALSE_POSITIVE
+KEPLER-113.01,3.5,0.7,5123.0,4.55,CONFIRMED
+KEPLER-114.01,9,2.1,6234.0,4.21,CANDIDATE
+KEPLER-115.01,5.5,1.1,5678.0,4.47,CONFIRMED
+KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
+
+		try {
+			const { header, rows } = parseCSV(sampleCSV);
+			const meta = analyzeDataset(header, rows);
+
+			const dataset: RawDataset = {
+				name: `${source}-sample.csv`,
+				originalCSV: sampleCSV,
+				rows,
+				header,
+			};
+
+			setRawDataset(dataset);
+			setColumnMeta(meta);
+			setShowDataPreview(true);
+
+			// Auto-select target and features
+			const targetCol = 'disposition';
+			const features = meta
+				.filter(
+					(col) =>
+						col.name !== targetCol &&
+						(col.inferredType === 'numeric' ||
+							col.inferredType === 'categorical'),
+				)
+				.map((col) => col.name);
+
+			setTargetColumn(targetCol);
+			setSelectedFeatures(features);
+		} catch (error) {
+			console.error('Sample dataset loading error:', error);
+		}
+	};
+
+	// Load real Kepler data on component mount
+	useEffect(() => {
+		if (selectedDataSource === 'kepler' && !rawDataset) {
+			loadKeplerDataset();
+		} else if (
+			selectedDataSource !== 'own' &&
+			selectedDataSource !== 'kepler' &&
+			!rawDataset
+		) {
+			loadSampleDataset(selectedDataSource);
+		}
+	}, []);
+
+	// Handle data source selection
+	const handleDataSourceChange = (source: string) => {
+		setSelectedDataSource(source);
+		if (source === 'kepler') {
+			loadKeplerDataset();
+		} else if (source !== 'own') {
+			loadSampleDataset(source);
+		} else {
+			// Reset for own data upload
+			setRawDataset(null);
+			setColumnMeta([]);
+			setTargetColumn('');
+			setSelectedFeatures([]);
+			setShowDataPreview(false);
+		}
+	};
+
+	// Handle target column selection
+	const handleTargetColumnChange = (columnName: string) => {
+		setTargetColumn(columnName);
+
+		// Remove target from features if selected
+		const newFeatures = selectedFeatures.filter((f) => f !== columnName);
+		setSelectedFeatures(newFeatures);
+	};
+
+	// Handle feature selection
+	const handleFeatureToggle = (columnName: string) => {
+		const newFeatures = selectedFeatures.includes(columnName)
+			? selectedFeatures.filter((f) => f !== columnName)
+			: [...selectedFeatures, columnName];
+
+		setSelectedFeatures(newFeatures);
+	};
+
+	// Handle column type override
+	const handleColumnTypeChange = (columnIndex: number, newType: ColumnType) => {
+		const updatedMeta = [...columnMeta];
+		updatedMeta[columnIndex] = {
+			...updatedMeta[columnIndex],
+			inferredType: newType,
+		};
+		setColumnMeta(updatedMeta);
+	};
+
+	// Handle download template
+	const handleDownloadTemplate = () => {
+		// Create CSV content for Kepler-style exoplanet data template
+		const csvContent =
+			'koi_disposition,koi_period,koi_impact,koi_duration,koi_depth,koi_prad,koi_teq,koi_insol,koi_steff,koi_slogg,koi_srad,koi_kepmag\n' +
+			'CONFIRMED,9.488,0.146,2.958,615.8,2.26,793.0,93.59,5455.0,4.467,0.927,15.347\n' +
+			'CANDIDATE,19.899,0.969,1.782,10829.0,14.6,638.0,39.3,5853.0,4.544,0.868,15.436\n' +
+			'FALSE POSITIVE,1.737,1.276,2.406,8079.2,33.46,1395.0,891.96,5805.0,4.564,0.791,15.597\n' +
+			'CONFIRMED,2.526,0.701,1.655,603.3,2.75,1406.0,926.16,6031.0,4.438,1.046,15.509\n' +
+			'CANDIDATE,11.094,0.538,4.595,1517.5,3.9,835.0,114.81,6046.0,4.486,0.972,15.714\n';
+
+		// Create a Blob and download link
+		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.setAttribute('href', url);
+		link.setAttribute('download', 'kepler-template.csv');
+		link.style.visibility = 'hidden';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	};
+
+	// Handle file upload trigger
+	const handleUploadTrigger = () => {
+		fileInputRef.current?.click();
+	};
+
+	// Handle file upload with CSV parsing and type inference
+	const handleFileUpload = async (
+		event: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const file = event.target.files?.[0];
+		if (!file) return;
+
+		// Validate file type
+		if (!file.name.toLowerCase().endsWith('.csv')) {
+			setParseError('Please upload a CSV file');
+			return;
+		}
+
+		setIsUploading(true);
+		setIsParsing(true);
+		setUploadedFileName(file.name);
+		setParseError(null);
+
+		try {
+			// Read file content
+			const csvContent = await file.text();
+
+			// Parse CSV and analyze
+			const { header, rows } = parseCSV(csvContent);
+			const meta = analyzeDataset(header, rows);
+
+			// Validate dataset
+			if (rows.length < 5) {
+				setParseError('Dataset must contain at least 5 rows for training');
+				return;
+			}
+
+			// Create dataset object
+			const dataset: RawDataset = {
+				name: file.name,
+				originalCSV: csvContent,
+				rows,
+				header,
+			};
+
+			// Update state
+			setRawDataset(dataset);
+			setColumnMeta(meta);
+			setShowDataPreview(true);
+
+			// Auto-select features (numeric and categorical columns)
+			const features = meta
+				.filter(
+					(col) =>
+						col.inferredType === 'numeric' ||
+						col.inferredType === 'categorical',
+				)
+				.map((col) => col.name);
+			setSelectedFeatures(features);
+
+			setSelectedDataSource('own');
+		} catch (error) {
+			console.error('CSV parsing error:', error);
+			setParseError(
+				`Failed to parse CSV: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+			);
+		} finally {
+			setIsUploading(false);
+			setIsParsing(false);
+		}
+	};
+
+	return (
+		<div className="grid grid-cols-1 gap-6">
+			{/* Workflow Navigation */}
+			<div className="flex items-center justify-center w-full mb-2">
+				<div className="flex items-center space-x-2 md:space-x-4 bg-white px-6 py-3 rounded-xl shadow-sm">
+					{/* Data Input - Active */}
+					<div className="flex items-center">
+						<div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center">
+							<span className="text-sm font-bold">1</span>
+						</div>
+						<span className="ml-2 text-sm font-medium">Data Input</span>
+					</div>
+
+					{/* Connector Line */}
+					<div className="w-8 h-0.5 bg-[#E6E7E9]"></div>
+
+					{/* Model Selection - Upcoming */}
+					<div className="flex items-center">
+						<div className="w-8 h-8 rounded-full bg-[#E6E7E9] text-gray-500 flex items-center justify-center">
+							<span className="text-sm font-bold">2</span>
+						</div>
+						<span className="ml-2 text-sm font-medium text-gray-500">
+							Model Selection
+						</span>
+					</div>
+
+					{/* Connector Line */}
+					<div className="w-8 h-0.5 bg-[#E6E7E9]"></div>
+
+					{/* Train & Validate - Upcoming */}
+					<div className="flex items-center">
+						<div className="w-8 h-8 rounded-full bg-[#E6E7E9] text-gray-500 flex items-center justify-center">
+							<span className="text-sm font-bold">3</span>
+						</div>
+						<span className="ml-2 text-sm font-medium text-gray-500">
+							Train & Validate
+						</span>
+					</div>
+
+					{/* Connector Line */}
+					<div className="w-8 h-0.5 bg-[#E6E7E9]"></div>
+
+					{/* Test & Export - Upcoming */}
+					<div className="flex items-center">
+						<div className="w-8 h-8 rounded-full bg-[#E6E7E9] text-gray-500 flex items-center justify-center">
+							<span className="text-sm font-bold">4</span>
+						</div>
+						<span className="ml-2 text-sm font-medium text-gray-500">
+							Test & Export
+						</span>
+					</div>
+				</div>
+			</div>
+
+			<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+				{/* First row - left */}
+				<div className="lg:col-span-6">
+					<Card>
+						<CardTitle>Select a Data Source</CardTitle>
+						<CardContent>
+							<p className="mb-4">
+								Select a data source to create your custom model. We've
+								pre-processed several datasets as starting points for your
+								training. Visit our documentation for detailed information about
+								each dataset and their characteristics.
+							</p>
+
+							<div className="space-y-3 mt-6">
+								{/* Kepler Database */}
+								<div
+									className={`flex items-center p-3 rounded-lg border transition-all ${
+										selectedDataSource === 'kepler'
+											? 'border-black bg-gray-50 shadow-sm'
+											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+									}`}
+								>
+									<div
+										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
+										onClick={() => handleDataSourceChange('kepler')}
+									>
+										{selectedDataSource === 'kepler' && (
+											<div className="w-3 h-3 bg-black rounded-full"></div>
+										)}
+									</div>
+									<div className="ml-3 flex-1">
+										<label
+											className="text-sm font-medium cursor-pointer"
+											onClick={() => handleDataSourceChange('kepler')}
+										>
+											Kepler Database (9,566 exoplanet candidates)
+										</label>
+										{selectedDataSource === 'kepler' && (
+											<p className="text-xs text-gray-600 mt-1">
+												Real NASA data with 28 astronomical features
+											</p>
+										)}
+									</div>
+								</div>
+
+								{/* K2 Database */}
+								<div
+									className={`flex items-center p-3 rounded-lg border transition-all ${
+										selectedDataSource === 'k2'
+											? 'border-black bg-gray-50 shadow-sm'
+											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+									}`}
+								>
+									<div
+										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
+										onClick={() => handleDataSourceChange('k2')}
+									>
+										{selectedDataSource === 'k2' && (
+											<div className="w-3 h-3 bg-black rounded-full"></div>
+										)}
+									</div>
+									<div className="ml-3 flex-1">
+										<label
+											className="text-sm font-medium cursor-pointer"
+											onClick={() => handleDataSourceChange('k2')}
+										>
+											K2 Database
+										</label>
+										{selectedDataSource === 'k2' && (
+											<p className="text-xs text-gray-600 mt-1">
+												Extended Kepler mission data
+											</p>
+										)}
+									</div>
+								</div>
+
+								{/* TESS Database */}
+								<div
+									className={`flex items-center p-3 rounded-lg border transition-all ${
+										selectedDataSource === 'tess'
+											? 'border-black bg-gray-50 shadow-sm'
+											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+									}`}
+								>
+									<div
+										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
+										onClick={() => handleDataSourceChange('tess')}
+									>
+										{selectedDataSource === 'tess' && (
+											<div className="w-3 h-3 bg-black rounded-full"></div>
+										)}
+									</div>
+									<div className="ml-3 flex-1">
+										<label
+											className="text-sm font-medium cursor-pointer"
+											onClick={() => handleDataSourceChange('tess')}
+										>
+											TESS Database
+										</label>
+										{selectedDataSource === 'tess' && (
+											<p className="text-xs text-gray-600 mt-1">
+												Transiting Exoplanet Survey Satellite data
+											</p>
+										)}
+									</div>
+								</div>
+
+								{/* Combined Database */}
+								<div
+									className={`flex items-center p-3 rounded-lg border transition-all ${
+										selectedDataSource === 'combined'
+											? 'border-black bg-gray-50 shadow-sm'
+											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+									}`}
+								>
+									<div
+										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
+										onClick={() => handleDataSourceChange('combined')}
+									>
+										{selectedDataSource === 'combined' && (
+											<div className="w-3 h-3 bg-black rounded-full"></div>
+										)}
+									</div>
+									<div className="ml-3 flex-1">
+										<label
+											className="text-sm font-medium cursor-pointer"
+											onClick={() => handleDataSourceChange('combined')}
+										>
+											Kepler, K2 & TESS Combined
+										</label>
+										{selectedDataSource === 'combined' && (
+											<p className="text-xs text-gray-600 mt-1">
+												Comprehensive multi-mission dataset
+											</p>
+										)}
+									</div>
+								</div>
+
+								{/* Upload Own Data */}
+								<div
+									className={`flex items-center p-3 rounded-lg border transition-all ${
+										selectedDataSource === 'own'
+											? 'border-blue-500 bg-blue-50 shadow-sm'
+											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+									}`}
+								>
+									<div
+										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
+										onClick={() => handleDataSourceChange('own')}
+									>
+										{selectedDataSource === 'own' && (
+											<div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+										)}
+									</div>
+									<div className="ml-3 flex-1">
+										<label
+											className={`text-sm font-medium cursor-pointer ${
+												selectedDataSource === 'own' ? 'text-blue-700' : ''
+											}`}
+											onClick={() => handleDataSourceChange('own')}
+										>
+											Upload your own Data
+										</label>
+										{selectedDataSource === 'own' && (
+											<p className="text-xs text-blue-600 mt-1">
+												🎯 Custom data upload mode activated - see guide panel →
+											</p>
+										)}
+									</div>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+
+				{/* First row - right - Guide Section (conditionally styled) */}
+				<div className="lg:col-span-6">
+					<Card
+						className={
+							selectedDataSource === 'own'
+								? 'border-2 border-blue-200 bg-blue-50 flex flex-col h-full'
+								: 'flex flex-col h-full'
+						}
+					>
+						<CardTitle
+							className={selectedDataSource === 'own' ? 'text-blue-800' : ''}
+						>
+							Data Upload Guide & Upload Your Own Data
+							{selectedDataSource === 'own' && (
+								<span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+									ACTIVE
+								</span>
+							)}
+						</CardTitle>
+						<CardContent className="flex flex-col lg:flex-row gap-6 min-h-[340px]">
+							<div className="flex-1 flex flex-col justify-between">
+								<div>
+									<p
+										className={`text-sm mb-4 ${
+											selectedDataSource === 'own' ? 'text-blue-700' : ''
+										}`}
+									>
+										{selectedDataSource === 'own'
+											? 'Follow this format to prepare your data. Download the template below for the exact structure required.'
+											: 'Your data should be uploaded in the following format. Download the sample .csv file to get an idea or visit documentation for more information.'}
+									</p>
+									<button
+										onClick={handleDownloadTemplate}
+										className={`border rounded-xl p-4 flex items-center w-full transition-colors ${
+											selectedDataSource === 'own'
+												? 'bg-blue-100 border-blue-300 hover:bg-blue-200'
+												: 'bg-[#f9f9f9] border-[#afafaf] hover:bg-gray-100'
+										}`}
+									>
+										<div
+											className={`w-10 h-10 mr-4 ${
+												selectedDataSource === 'own'
+													? 'text-blue-600'
+													: 'text-gray-500'
+											}`}
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												fill="none"
+												viewBox="0 0 24 24"
+												strokeWidth={1.5}
+												stroke="currentColor"
+												className="w-full h-full"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"
+												/>
+											</svg>
+										</div>
+										<div>
+											<p
+												className={`font-semibold text-base text-left ${
+													selectedDataSource === 'own' ? 'text-blue-800' : ''
+												}`}
+											>
+												Download template file
+											</p>
+											<p
+												className={`text-left ${
+													selectedDataSource === 'own'
+														? 'text-blue-600'
+														: 'text-neutral-500'
+												}`}
+											>
+												kepler-template.csv
+											</p>
+										</div>
+									</button>
+									{selectedDataSource === 'own' && (
+										<div className="mt-4 p-3 bg-blue-100 rounded-lg border border-blue-200">
+											<h4 className="text-sm font-medium text-blue-800 mb-2">
+												📋 Upload Requirements:
+											</h4>
+											<ul className="text-xs text-blue-700 space-y-1">
+												<li>• CSV format with header row</li>
+												<li>• At least 5 rows of data for training</li>
+												<li>• Include both features and target column</li>
+												<li>• Use numeric values where possible</li>
+											</ul>
+										</div>
+									)}
+								</div>
+							</div>
+							{/* Upload UI always visible in own mode */}
+							{selectedDataSource === 'own' && (
+								<div className="flex-1 flex flex-col justify-center items-center">
+									<input
+										type="file"
+										ref={fileInputRef}
+										accept=".csv,.xlsx,.xls"
+										onChange={handleFileUpload}
+										className="hidden"
+									/>
+									<button
+										onClick={handleUploadTrigger}
+										style={{
+											border: '2px solid #000',
+											borderRadius: '0.75rem',
+										}}
+										className="flex flex-col items-center justify-center w-full h-full bg-white transition-colors"
+										disabled={isUploading}
+									>
+										{isUploading ? (
+											<svg
+												className="animate-spin h-10 w-10 text-black mb-4"
+												xmlns="http://www.w3.org/2000/svg"
+												fill="none"
+												viewBox="0 0 24 24"
+											>
+												<circle
+													className="opacity-25"
+													cx="12"
+													cy="12"
+													r="10"
+													stroke="currentColor"
+													strokeWidth="4"
+												></circle>
+												<path
+													className="opacity-75"
+													fill="currentColor"
+													d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+												></path>
+											</svg>
+										) : (
+											<svg
+												className="w-10 h-10 mb-4"
+												xmlns="http://www.w3.org/2000/svg"
+												fill="none"
+												viewBox="0 0 24 24"
+												strokeWidth={1.5}
+												stroke="currentColor"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
+												/>
+											</svg>
+										)}
+										<h3 className="font-semibold text-lg mb-2">
+											{uploadedFileName
+												? `File: ${uploadedFileName}`
+												: 'Upload your data'}
+										</h3>
+										<p className="text-sm text-center">
+											See documentation for data format requirements.
+										</p>
+									</button>
+								</div>
+							)}
+						</CardContent>
+					</Card>
+				</div>
+
+				{/* Second row - upload area (conditionally shown) */}
+
+				{/* Third row - Overview */}
+				<div className="lg:col-span-6">
+					<Card>
+						<CardTitle>Dataset Overview</CardTitle>
+						<CardContent>
+							{isParsing ? (
+								<div className="flex flex-col items-center justify-center py-8">
+									<svg
+										className="animate-spin h-8 w-8 text-black mb-4"
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+									>
+										<circle
+											className="opacity-25"
+											cx="12"
+											cy="12"
+											r="10"
+											stroke="currentColor"
+											strokeWidth="4"
+										></circle>
+										<path
+											className="opacity-75"
+											fill="currentColor"
+											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+										></path>
+									</svg>
+									<p className="text-sm text-gray-600">
+										Loading and analyzing dataset...
+									</p>
+								</div>
+							) : parseError ? (
+								<div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+									<p className="text-red-700 text-sm">{parseError}</p>
+									<button
+										onClick={() => {
+											setParseError(null);
+											if (selectedDataSource === 'kepler') {
+												loadKeplerDataset();
+											}
+										}}
+										className="mt-2 text-sm text-red-600 underline hover:text-red-800"
+									>
+										Try again
+									</button>
+								</div>
+							) : rawDataset ? (
+								<div>
+									{selectedDataSource === 'kepler' && (
+										<div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+											<h5 className="text-sm font-medium text-blue-800 mb-2">
+												About the Kepler Dataset
+											</h5>
+											<p className="text-xs text-blue-700">
+												This dataset contains exoplanet candidates discovered by
+												NASA's Kepler Space Telescope. Each row represents a
+												potential planet with 28 features including orbital
+												period, stellar temperature, planet radius, and
+												disposition (CONFIRMED, CANDIDATE, or FALSE POSITIVE).
+												This is real astronomical data used for machine learning
+												research.
+											</p>
+										</div>
+									)}
+									<p className="mb-4">
+										Dataset "{rawDataset.name}" contains{' '}
+										{rawDataset.rows.length} samples with {columnMeta.length}{' '}
+										columns. The data has been automatically analyzed for column
+										types and missing values.
+										{selectedDataSource === 'kepler' &&
+											rawDataset.rows.length === 1000 && (
+												<span className="block text-sm text-blue-600 mt-2">
+													📊 Showing first 1,000 rows of 9,566 total for
+													performance. Full dataset will be used for training.
+												</span>
+											)}
+									</p>
+
+									{/* Column type summary */}
+									<div className="mb-4">
+										<h4 className="text-sm font-medium mb-2">Column Types:</h4>
+										<div className="grid grid-cols-2 gap-2 text-xs">
+											<div>
+												Numeric:{' '}
+												{
+													columnMeta.filter((c) => c.inferredType === 'numeric')
+														.length
+												}
+											</div>
+											<div>
+												Categorical:{' '}
+												{
+													columnMeta.filter(
+														(c) => c.inferredType === 'categorical',
+													).length
+												}
+											</div>
+											<div>
+												Boolean:{' '}
+												{
+													columnMeta.filter((c) => c.inferredType === 'boolean')
+														.length
+												}
+											</div>
+											<div>
+												Text:{' '}
+												{
+													columnMeta.filter((c) => c.inferredType === 'text')
+														.length
+												}
+											</div>
+										</div>
+									</div>
+
+									{/* Target column selection */}
+									<div className="mb-4">
+										<h4 className="text-sm font-medium mb-2">
+											Target Column (what to predict):
+										</h4>
+										<select
+											value={targetColumn}
+											onChange={(e) => handleTargetColumnChange(e.target.value)}
+											className="w-full p-2 border border-gray-300 rounded text-sm"
+										>
+											<option value="">Select target column...</option>
+											{columnMeta
+												.filter(
+													(col) =>
+														col.inferredType === 'categorical' ||
+														col.inferredType === 'boolean',
+												)
+												.map((col) => (
+													<option key={col.name} value={col.name}>
+														{col.name} ({col.uniqueValues?.length || 0} unique
+														values)
+													</option>
+												))}
+										</select>
+									</div>
+
+									{/* Dataset preview section */}
+									<div className="mt-6">
+										<h4 className="text-sm font-medium mb-2">
+											Dataset Preview (first 5 rows):
+										</h4>
+										<div className="overflow-x-auto border border-gray-300 rounded">
+											<table className="w-full text-xs">
+												<thead>
+													<tr className="bg-gray-100">
+														{rawDataset.header.map((header, index) => (
+															<th
+																key={index}
+																className="p-2 border-r border-b border-gray-300 text-left min-w-[80px]"
+															>
+																<div className="font-medium">{header}</div>
+																<div className="text-gray-500 font-normal">
+																	{columnMeta[index]?.inferredType}
+																</div>
+															</th>
+														))}
+													</tr>
+												</thead>
+												<tbody className="text-xs">
+													{rawDataset.rows.slice(0, 5).map((row, rowIndex) => (
+														<tr key={rowIndex}>
+															{row.map((cell, cellIndex) => (
+																<td
+																	key={cellIndex}
+																	className="p-2 border-r border-b border-gray-300 max-w-[100px] truncate"
+																>
+																	{cell}
+																</td>
+															))}
+														</tr>
+													))}
+												</tbody>
+											</table>
+										</div>
+									</div>
+
+									{targetColumn && (
+										<div className="mt-4">
+											<h4 className="text-sm font-medium mb-2">
+												Target Variable Analysis:
+											</h4>
+											<div className="grid grid-cols-2 gap-4">
+												<div>
+													<h5 className="text-sm font-medium mb-1">
+														Target Column
+													</h5>
+													<p className="text-xs">{targetColumn}</p>
+												</div>
+												<div>
+													<h5 className="text-sm font-medium mb-1">
+														Unique Values
+													</h5>
+													<p className="text-xs">
+														{columnMeta
+															.find((c) => c.name === targetColumn)
+															?.uniqueValues?.join(', ') || 'N/A'}
+													</p>
+												</div>
+											</div>
+										</div>
+									)}
+								</div>
+							) : (
+								<p className="mb-4">
+									Select a data source to see dataset information. Our
+									preprocessing pipeline automatically analyzes data structure,
+									infers column types, and validates format compatibility for
+									machine learning.
+								</p>
+							)}
+						</CardContent>
+					</Card>
+				</div>
+
+				{/* Third row - Data Configuration */}
+				<div className="lg:col-span-6">
+					<Card>
+						<CardTitle>Feature Selection & Data Configuration</CardTitle>
+						<CardContent>
+							{isParsing ? (
+								<div className="flex items-center justify-center py-8">
+									<p className="text-sm text-gray-600">Processing dataset...</p>
+								</div>
+							) : rawDataset ? (
+								<div>
+									<p className="mb-4">
+										Select which columns to use as features for training your
+										model. Features should be numeric or categorical data that
+										helps predict your target variable.
+									</p>
+
+									{/* Feature selection */}
+									<div className="mb-4">
+										<div className="flex items-center justify-between mb-3">
+											<h4 className="text-sm font-medium">
+												Features to include in training (
+												{selectedFeatures.length} selected):
+											</h4>
+											{selectedDataSource === 'kepler' && (
+												<div className="flex gap-2">
+													<button
+														onClick={() => {
+															const planetaryFeatures = columnMeta
+																.filter(
+																	(col) =>
+																		col.name !== targetColumn &&
+																		getFeatureCategory(col.name) ===
+																			'Planetary Properties',
+																)
+																.map((col) => col.name);
+															setSelectedFeatures([
+																...new Set([
+																	...selectedFeatures,
+																	...planetaryFeatures,
+																]),
+															]);
+														}}
+														className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+													>
+														+ Planetary
+													</button>
+													<button
+														onClick={() => {
+															const stellarFeatures = columnMeta
+																.filter(
+																	(col) =>
+																		col.name !== targetColumn &&
+																		getFeatureCategory(col.name) ===
+																			'Stellar Properties',
+																)
+																.map((col) => col.name);
+															setSelectedFeatures([
+																...new Set([
+																	...selectedFeatures,
+																	...stellarFeatures,
+																]),
+															]);
+														}}
+														className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+													>
+														+ Stellar
+													</button>
+													<button
+														onClick={() => {
+															const orbitalFeatures = columnMeta
+																.filter(
+																	(col) =>
+																		col.name !== targetColumn &&
+																		getFeatureCategory(col.name) ===
+																			'Orbital Properties',
+																)
+																.map((col) => col.name);
+															setSelectedFeatures([
+																...new Set([
+																	...selectedFeatures,
+																	...orbitalFeatures,
+																]),
+															]);
+														}}
+														className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200"
+													>
+														+ Orbital
+													</button>
+												</div>
+											)}
+										</div>
+										{selectedDataSource === 'kepler' ? (
+											// Grouped view for Kepler dataset
+											<div className="space-y-4 max-h-96 overflow-y-auto">
+												{[
+													'Planetary Properties',
+													'Stellar Properties',
+													'Orbital Properties',
+													'Detection Quality',
+													'Position & Timing',
+													'Other',
+												].map((category) => {
+													const categoryFeatures = columnMeta.filter(
+														(col) =>
+															col.name !== targetColumn &&
+															getFeatureCategory(col.name) === category,
+													);
+
+													if (categoryFeatures.length === 0) return null;
+
+													return (
+														<div
+															key={category}
+															className="border border-gray-300 rounded-lg p-3"
+														>
+															<h5 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+																{category}
+																<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+																	{categoryFeatures.length} features
+																</span>
+															</h5>
+															<div className="space-y-2">
+																{categoryFeatures.map((col) => (
+																	<div
+																		key={col.name}
+																		className="border border-gray-200 rounded p-2 hover:bg-gray-50"
+																	>
+																		<div className="flex items-start justify-between">
+																			<div className="flex-1">
+																				<div className="flex items-center mb-1">
+																					<input
+																						type="checkbox"
+																						checked={selectedFeatures.includes(
+																							col.name,
+																						)}
+																						onChange={() =>
+																							handleFeatureToggle(col.name)
+																						}
+																						className="mr-3"
+																					/>
+																					<span className="text-sm font-medium">
+																						{col.name}
+																					</span>
+																					<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+																						{col.inferredType}
+																					</span>
+																				</div>
+																				<p className="text-xs text-gray-600 ml-6">
+																					{getFeatureDescription(col.name)}
+																				</p>
+																			</div>
+																			<div className="text-xs text-gray-500 ml-4">
+																				{col.inferredType === 'numeric' &&
+																					col.mean !== undefined && (
+																						<div>μ={col.mean.toFixed(2)}</div>
+																					)}
+																				{col.inferredType === 'categorical' && (
+																					<div>
+																						{col.uniqueValues?.length || 0}{' '}
+																						values
+																					</div>
+																				)}
+																				{col.missingCount > 0 && (
+																					<div className="text-orange-600">
+																						{col.missingCount} missing
+																					</div>
+																				)}
+																			</div>
+																		</div>
+																	</div>
+																))}
+															</div>
+														</div>
+													);
+												})}
+											</div>
+										) : (
+											// Standard view for other datasets
+											<div className="space-y-2 max-h-40 overflow-y-auto">
+												{columnMeta
+													.filter((col) => col.name !== targetColumn)
+													.map((col) => (
+														<div
+															key={col.name}
+															className="border border-gray-200 rounded p-3 hover:bg-gray-50"
+														>
+															<div className="flex items-start justify-between">
+																<div className="flex-1">
+																	<div className="flex items-center mb-1">
+																		<input
+																			type="checkbox"
+																			checked={selectedFeatures.includes(
+																				col.name,
+																			)}
+																			onChange={() =>
+																				handleFeatureToggle(col.name)
+																			}
+																			className="mr-3"
+																		/>
+																		<span className="text-sm font-medium">
+																			{col.name}
+																		</span>
+																		<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+																			{col.inferredType}
+																		</span>
+																	</div>
+																</div>
+																<div className="text-xs text-gray-500 ml-4">
+																	{col.inferredType === 'numeric' &&
+																		col.mean !== undefined && (
+																			<div>μ={col.mean.toFixed(2)}</div>
+																		)}
+																	{col.inferredType === 'categorical' && (
+																		<div>
+																			{col.uniqueValues?.length || 0} values
+																		</div>
+																	)}
+																	{col.missingCount > 0 && (
+																		<div className="text-orange-600">
+																			{col.missingCount} missing
+																		</div>
+																	)}
+																</div>
+															</div>
+														</div>
+													))}
+											</div>
+										)}
+									</div>
+
+									{/* Data preprocessing options */}
+									<div className="mt-4">
+										<h4 className="text-sm font-medium mb-2">
+											Preprocessing Options:
+										</h4>
+										<div className="space-y-2">
+											<label className="flex items-center">
+												<input
+													type="checkbox"
+													defaultChecked
+													className="mr-2"
+												/>
+												<span className="text-sm">
+													Normalize numeric features (Z-score)
+												</span>
+											</label>
+											<label className="flex items-center">
+												<input
+													type="checkbox"
+													defaultChecked
+													className="mr-2"
+												/>
+												<span className="text-sm">
+													Remove rows with missing target values
+												</span>
+											</label>
+											<label className="flex items-center">
+												<input
+													type="checkbox"
+													defaultChecked
+													className="mr-2"
+												/>
+												<span className="text-sm">
+													One-hot encode categorical features
+												</span>
+											</label>
+										</div>
+									</div>
+
+									{/* Data summary */}
+									<div className="mt-4 p-3 bg-gray-50 rounded">
+										<h4 className="text-sm font-medium mb-1">
+											Ready for Training:
+										</h4>
+										<div className="text-xs text-gray-600">
+											{selectedFeatures.length} features ×{' '}
+											{rawDataset.rows.length} samples
+											{targetColumn && ` → ${targetColumn}`}
+										</div>
+										{selectedFeatures.length === 0 && (
+											<div className="text-xs text-red-600 mt-1">
+												⚠️ Please select at least one feature to proceed
+											</div>
+										)}
+										{!targetColumn && (
+											<div className="text-xs text-red-600 mt-1">
+												⚠️ Please select a target column to proceed
+											</div>
+										)}
+									</div>
+								</div>
+							) : (
+								<div>
+									<p className="mb-4">
+										Feature selection and data configuration options will appear
+										here once you load a dataset.
+									</p>
+
+									<div className="bg-[var(--placeholder-color)] h-[200px] flex items-center justify-center rounded-lg border border-[var(--input-border)]">
+										<p className="text-[var(--text-secondary)]">
+											Feature Selection Interface
+										</p>
+									</div>
+								</div>
+							)}
+						</CardContent>
+					</Card>
+				</div>
+
+				{/* Select Model Button */}
+				<div className="fixed bottom-8 right-8 z-10">
+					{selectedFeatures.length > 0 && targetColumn ? (
+						<Link
+							href="/dashboard/classroom/model-selection"
+							className="bg-black text-white rounded-xl py-4 px-8 font-semibold text-xl flex items-center shadow-lg hover:bg-gray-800 transition-colors"
+						>
+							Select Model
+							<svg
+								className="w-7 h-7 ml-2"
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+							>
+								<path
+									fillRule="evenodd"
+									d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+									clipRule="evenodd"
+								/>
+							</svg>
+						</Link>
+					) : (
+						<div className="bg-gray-400 text-white rounded-xl py-4 px-8 font-semibold text-xl flex items-center shadow-lg cursor-not-allowed">
+							<span>
+								{!rawDataset
+									? 'Load Data First'
+									: !targetColumn
+									? 'Select Target Column'
+									: 'Select Features'}
+							</span>
+							<svg
+								className="w-7 h-7 ml-2 opacity-50"
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+							>
+								<path
+									fillRule="evenodd"
+									d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+									clipRule="evenodd"
+								/>
+							</svg>
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
