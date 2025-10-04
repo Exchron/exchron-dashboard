@@ -1,5 +1,5 @@
 // Logistic Regression implementation for binary classification
-// TODO(ClassroomSpec:6.3) Implement stable gradient descent with L2 regularization
+// IMPLEMENTATION UPDATE: Enhanced with stable gradient descent, L2 regularization, and batch processing
 
 import { sigmoid, clamp, safeLog, shuffleIndices } from '../core/math';
 
