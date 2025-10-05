@@ -408,6 +408,71 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 		console.warn('Column type override not yet implemented in store');
 	};
 
+	// Handle logging data when Select Model button is clicked
+	const handleSelectModelClick = () => {
+		const dataInputSummary = {
+			selectedDataSource,
+			targetColumn,
+			selectedFeatures,
+			missingValueStrategy,
+			normalization,
+			datasetInfo: rawDataset
+				? {
+						name: rawDataset.name,
+						totalRows: rawDataset.rows.length,
+						totalColumns: rawDataset.header.length,
+						header: rawDataset.header,
+						sampleData: rawDataset.rows.slice(0, 3), // First 3 rows as sample
+				  }
+				: null,
+			columnMetadata: columnMeta?.map((col) => ({
+				name: col.name,
+				type: col.inferredType,
+				missingCount: col.missingCount,
+				...(col.inferredType === 'numeric' && {
+					statistics: {
+						min: col.min,
+						max: col.max,
+						mean: col.mean,
+					},
+				}),
+				...(col.inferredType === 'categorical' && {
+					uniqueValues: col.uniqueValues,
+				}),
+			})),
+			readinessCheck: {
+				hasDataset: !!rawDataset,
+				hasTargetColumn: !!targetColumn,
+				hasFeatures: (selectedFeatures?.length || 0) > 0,
+				featureCount: selectedFeatures?.length || 0,
+				isReadyForTraining: !!(
+					rawDataset &&
+					targetColumn &&
+					(selectedFeatures?.length || 0) > 0
+				),
+			},
+			timestamp: new Date().toISOString(),
+		};
+
+		console.group('🔍 Data Input Summary - Before Model Selection');
+		console.log('📊 Dataset Information:', {
+			source: dataInputSummary.selectedDataSource,
+			name: dataInputSummary.datasetInfo?.name,
+			rows: dataInputSummary.datasetInfo?.totalRows,
+			columns: dataInputSummary.datasetInfo?.totalColumns,
+		});
+		console.log('🎯 Target Column:', dataInputSummary.targetColumn);
+		console.log('🔧 Selected Features:', dataInputSummary.selectedFeatures);
+		console.log('📈 Column Metadata:', dataInputSummary.columnMetadata);
+		console.log('⚙️ Configuration:', {
+			missingValueStrategy: dataInputSummary.missingValueStrategy,
+			normalization: dataInputSummary.normalization,
+		});
+		console.log('✅ Readiness Check:', dataInputSummary.readinessCheck);
+		console.log('📋 Complete Data Summary:', dataInputSummary);
+		console.groupEnd();
+	};
+
 	// Handle download template
 	const handleDownloadTemplate = () => {
 		// Create CSV content for Kepler-style exoplanet data template
@@ -516,26 +581,13 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 					{/* Connector Line */}
 					<div className="w-8 h-0.5 bg-[#E6E7E9]"></div>
 
-					{/* Train & Validate - Upcoming */}
+					{/* Train & Validate - Upcoming (now final step) */}
 					<div className="flex items-center">
 						<div className="w-8 h-8 rounded-full bg-[#E6E7E9] text-gray-500 flex items-center justify-center">
 							<span className="text-sm font-bold">3</span>
 						</div>
 						<span className="ml-2 text-sm font-medium text-gray-500">
 							Train & Validate
-						</span>
-					</div>
-
-					{/* Connector Line */}
-					<div className="w-8 h-0.5 bg-[#E6E7E9]"></div>
-
-					{/* Test & Export - Upcoming */}
-					<div className="flex items-center">
-						<div className="w-8 h-8 rounded-full bg-[#E6E7E9] text-gray-500 flex items-center justify-center">
-							<span className="text-sm font-bold">4</span>
-						</div>
-						<span className="ml-2 text-sm font-medium text-gray-500">
-							Test & Export
 						</span>
 					</div>
 				</div>
@@ -920,6 +972,71 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											</p>
 										</div>
 									)}
+
+									{/* Target column selection - Moved to top and highlighted */}
+									<div className="mb-6 p-4 bg-[#F9F9F9] border-2 border-[#E6E7E9] rounded-lg shadow-sm">
+										<h4 className="text-base font-semibold mb-3 text-black flex items-center">
+											<svg
+												className="w-5 h-5 mr-2"
+												fill="currentColor"
+												viewBox="0 0 20 20"
+											>
+												<path
+													fillRule="evenodd"
+													d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+													clipRule="evenodd"
+												/>
+											</svg>
+											Target Column (what to predict):
+										</h4>
+										<select
+											value={targetColumn}
+											onChange={(e) => handleTargetColumnChange(e.target.value)}
+											className="w-full p-3 border-2 border-[#AFAFAF] rounded-lg text-sm bg-white focus:border-black focus:ring-2 focus:ring-[#E6E7E9]"
+										>
+											<option value="">Select target column...</option>
+											{columnMeta
+												?.filter(
+													(col) =>
+														col.inferredType === 'categorical' ||
+														col.inferredType === 'boolean',
+												)
+												.map((col) => (
+													<option key={col.name} value={col.name}>
+														{col.name} ({col.uniqueValues?.length || 0} unique
+														values)
+													</option>
+												))}
+										</select>
+										{targetColumn && (
+											<div className="mt-3 p-3 bg-white rounded border border-[#E6E7E9]">
+												<h5 className="text-sm font-medium mb-2 text-black">
+													Target Variable Analysis:
+												</h5>
+												<div className="grid grid-cols-2 gap-4">
+													<div>
+														<h6 className="text-xs font-medium mb-1 text-gray-700">
+															Target Column
+														</h6>
+														<p className="text-xs text-gray-600">
+															{targetColumn}
+														</p>
+													</div>
+													<div>
+														<h6 className="text-xs font-medium mb-1 text-gray-700">
+															Unique Values
+														</h6>
+														<p className="text-xs text-gray-600">
+															{columnMeta
+																?.find((c) => c.name === targetColumn)
+																?.uniqueValues?.join(', ') || 'N/A'}
+														</p>
+													</div>
+												</div>
+											</div>
+										)}
+									</div>
+
 									<p className="mb-4">
 										Dataset "{rawDataset.name}" contains{' '}
 										{rawDataset.rows.length} samples with{' '}
@@ -959,31 +1076,6 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 													.length || 0}
 											</div>
 										</div>
-									</div>{' '}
-									{/* Target column selection */}
-									<div className="mb-4">
-										<h4 className="text-sm font-medium mb-2">
-											Target Column (what to predict):
-										</h4>
-										<select
-											value={targetColumn}
-											onChange={(e) => handleTargetColumnChange(e.target.value)}
-											className="w-full p-2 border border-gray-300 rounded text-sm"
-										>
-											<option value="">Select target column...</option>
-											{columnMeta
-												?.filter(
-													(col) =>
-														col.inferredType === 'categorical' ||
-														col.inferredType === 'boolean',
-												)
-												.map((col) => (
-													<option key={col.name} value={col.name}>
-														{col.name} ({col.uniqueValues?.length || 0} unique
-														values)
-													</option>
-												))}
-										</select>
 									</div>
 									{/* Dataset preview section */}
 									<div className="mt-6">
@@ -1024,31 +1116,6 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											</table>
 										</div>
 									</div>
-									{targetColumn && (
-										<div className="mt-4">
-											<h4 className="text-sm font-medium mb-2">
-												Target Variable Analysis:
-											</h4>
-											<div className="grid grid-cols-2 gap-4">
-												<div>
-													<h5 className="text-sm font-medium mb-1">
-														Target Column
-													</h5>
-													<p className="text-xs">{targetColumn}</p>
-												</div>
-												<div>
-													<h5 className="text-sm font-medium mb-1">
-														Unique Values
-													</h5>
-													<p className="text-xs">
-														{columnMeta
-															?.find((c) => c.name === targetColumn)
-															?.uniqueValues?.join(', ') || 'N/A'}
-													</p>
-												</div>
-											</div>
-										</div>
-									)}
 								</div>
 							) : (
 								<p className="mb-4">
@@ -1081,255 +1148,54 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 
 									{/* Feature selection */}
 									<div className="mb-4">
-										<div className="flex items-center justify-between mb-3">
-											<h4 className="text-sm font-medium">
-												Features to include in training (
-												{selectedFeatures?.length || 0} selected):
-											</h4>
-											{selectedDataSource === 'kepler' && columnMeta && (
-												<div className="flex gap-2">
-													<button
-														onClick={() => {
-															const planetaryFeatures = columnMeta
-																.filter(
-																	(col) =>
-																		col.name !== targetColumn &&
-																		getFeatureCategory(col.name) ===
-																			'Planetary Properties',
-																)
-																.map((col) => col.name);
-															classroomStore.setSelectedFeatures([
-																...new Set([
-																	...(selectedFeatures || []),
-																	...planetaryFeatures,
-																]),
-															]);
-														}}
-														className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-													>
-														+ Planetary
-													</button>
-													<button
-														onClick={() => {
-															const stellarFeatures = columnMeta
-																.filter(
-																	(col) =>
-																		col.name !== targetColumn &&
-																		getFeatureCategory(col.name) ===
-																			'Stellar Properties',
-																)
-																.map((col) => col.name);
-															classroomStore.setSelectedFeatures([
-																...new Set([
-																	...(selectedFeatures || []),
-																	...stellarFeatures,
-																]),
-															]);
-														}}
-														className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-													>
-														+ Stellar
-													</button>
-													<button
-														onClick={() => {
-															const orbitalFeatures = columnMeta
-																.filter(
-																	(col) =>
-																		col.name !== targetColumn &&
-																		getFeatureCategory(col.name) ===
-																			'Orbital Properties',
-																)
-																.map((col) => col.name);
-															classroomStore.setSelectedFeatures([
-																...new Set([
-																	...(selectedFeatures || []),
-																	...orbitalFeatures,
-																]),
-															]);
-														}}
-														className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200"
-													>
-														+ Orbital
-													</button>
-												</div>
-											)}
-										</div>
-										{selectedDataSource === 'kepler' ? (
-											// Grouped view for Kepler dataset
-											<div className="space-y-4 max-h-96 overflow-y-auto">
-												{[
-													'Planetary Properties',
-													'Stellar Properties',
-													'Orbital Properties',
-													'Detection Quality',
-													'Position & Timing',
-													'Other',
-												].map((category) => {
-													const categoryFeatures =
-														columnMeta?.filter(
-															(col) =>
-																col.name !== targetColumn &&
-																getFeatureCategory(col.name) === category,
-														) || [];
-
-													if (categoryFeatures.length === 0) return null;
-
-													return (
-														<div
-															key={category}
-															className="border border-gray-300 rounded-lg p-3"
-														>
-															<h5 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
-																{category}
-																<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-																	{categoryFeatures.length} features
-																</span>
-															</h5>
-															<div className="space-y-2">
-																{categoryFeatures.map((col) => (
-																	<div
-																		key={col.name}
-																		className="border border-gray-200 rounded p-2 hover:bg-gray-50"
-																	>
-																		<div className="flex items-start justify-between">
-																			<div className="flex-1">
-																				<div className="flex items-center mb-1">
-																					<input
-																						type="checkbox"
-																						checked={(
-																							selectedFeatures || []
-																						).includes(col.name)}
-																						onChange={() =>
-																							handleFeatureToggle(col.name)
-																						}
-																						className="mr-3"
-																					/>
-																					<span className="text-sm font-medium">
-																						{col.name}
-																					</span>
-																					<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-																						{col.inferredType}
-																					</span>
-																				</div>
-																				<p className="text-xs text-gray-600 ml-6">
-																					{getFeatureDescription(col.name)}
-																				</p>
-																			</div>
-																			<div className="text-xs text-gray-500 ml-4">
-																				{col.inferredType === 'numeric' &&
-																					col.mean !== undefined && (
-																						<div>μ={col.mean.toFixed(2)}</div>
-																					)}
-																				{col.inferredType === 'categorical' && (
-																					<div>
-																						{col.uniqueValues?.length || 0}{' '}
-																						values
-																					</div>
-																				)}
-																				{col.missingCount > 0 && (
-																					<div className="text-orange-600">
-																						{col.missingCount} missing
-																					</div>
-																				)}
-																			</div>
-																		</div>
-																	</div>
-																))}
-															</div>
-														</div>
-													);
-												})}
-											</div>
-										) : (
-											// Standard view for other datasets
-											<div className="space-y-2 max-h-40 overflow-y-auto">
-												{columnMeta
-													?.filter((col) => col.name !== targetColumn)
-													.map((col) => (
-														<div
-															key={col.name}
-															className="border border-gray-200 rounded p-3 hover:bg-gray-50"
-														>
-															<div className="flex items-start justify-between">
-																<div className="flex-1">
-																	<div className="flex items-center mb-1">
-																		<input
-																			type="checkbox"
-																			checked={(
-																				selectedFeatures || []
-																			).includes(col.name)}
-																			onChange={() =>
-																				handleFeatureToggle(col.name)
-																			}
-																			className="mr-3"
-																		/>
-																		<span className="text-sm font-medium">
-																			{col.name}
-																		</span>
-																		<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-																			{col.inferredType}
-																		</span>
-																	</div>
-																</div>
-																<div className="text-xs text-gray-500 ml-4">
-																	{col.inferredType === 'numeric' &&
-																		col.mean !== undefined && (
-																			<div>μ={col.mean.toFixed(2)}</div>
-																		)}
-																	{col.inferredType === 'categorical' && (
-																		<div>
-																			{col.uniqueValues?.length || 0} values
-																		</div>
-																	)}
-																	{col.missingCount > 0 && (
-																		<div className="text-orange-600">
-																			{col.missingCount} missing
-																		</div>
-																	)}
-																</div>
-															</div>
-														</div>
-													))}
-											</div>
-										)}
-									</div>
-
-									{/* Data preprocessing options */}
-									<div className="mt-4">
-										<h4 className="text-sm font-medium mb-2">
-											Preprocessing Options:
+										<h4 className="text-sm font-medium mb-3">
+											Features to include in training (
+											{selectedFeatures?.length || 0} selected):
 										</h4>
-										<div className="space-y-2">
-											<label className="flex items-center">
-												<input
-													type="checkbox"
-													defaultChecked
-													className="mr-2"
-												/>
-												<span className="text-sm">
-													Normalize numeric features (Z-score)
-												</span>
-											</label>
-											<label className="flex items-center">
-												<input
-													type="checkbox"
-													defaultChecked
-													className="mr-2"
-												/>
-												<span className="text-sm">
-													Remove rows with missing target values
-												</span>
-											</label>
-											<label className="flex items-center">
-												<input
-													type="checkbox"
-													defaultChecked
-													className="mr-2"
-												/>
-												<span className="text-sm">
-													One-hot encode categorical features
-												</span>
-											</label>
+
+										{/* Simple list of all columns with checkboxes */}
+										<div className="space-y-2 max-h-80 overflow-y-auto">
+											{columnMeta
+												?.filter((col) => col.name !== targetColumn)
+												.map((col) => (
+													<div
+														key={col.name}
+														className="flex items-center p-3 border border-gray-200 rounded hover:bg-gray-50"
+													>
+														<input
+															type="checkbox"
+															checked={(selectedFeatures || []).includes(
+																col.name,
+															)}
+															onChange={() => handleFeatureToggle(col.name)}
+															className="mr-3"
+														/>
+														<div className="flex-1">
+															<span className="text-sm font-medium">
+																{col.name}
+															</span>
+															<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+																{col.inferredType}
+															</span>
+														</div>
+														<div className="text-xs text-gray-500">
+															{col.inferredType === 'numeric' &&
+																col.mean !== undefined && (
+																	<div>μ={col.mean.toFixed(2)}</div>
+																)}
+															{col.inferredType === 'categorical' && (
+																<div>
+																	{col.uniqueValues?.length || 0} values
+																</div>
+															)}
+															{col.missingCount > 0 && (
+																<div className="text-orange-600">
+																	{col.missingCount} missing
+																</div>
+															)}
+														</div>
+													</div>
+												))}
 										</div>
 									</div>
 
@@ -1378,6 +1244,7 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 					{(selectedFeatures?.length || 0) > 0 && targetColumn ? (
 						<Link
 							href="/dashboard/classroom/model-selection"
+							onClick={handleSelectModelClick}
 							className="bg-black text-white rounded-xl py-4 px-8 font-semibold text-xl flex items-center shadow-lg hover:bg-gray-800 transition-colors"
 						>
 							Select Model

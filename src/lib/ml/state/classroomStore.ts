@@ -69,38 +69,83 @@ class ClassroomStore {
 
 	// Data Input actions
 	setDataSource(source: DataInputState['selectedDataSource']) {
-		this.state.dataInput.selectedDataSource = source;
+		this.state = {
+			...this.state,
+			dataInput: {
+				...this.state.dataInput,
+				selectedDataSource: source,
+			},
+		};
 		this.notify();
 	}
 
 	setUploadedFile(file: File) {
-		this.state.dataInput.uploadedFile = file;
+		this.state = {
+			...this.state,
+			dataInput: {
+				...this.state.dataInput,
+				uploadedFile: file,
+			},
+		};
 		this.notify();
 	}
 
 	setRawDataset(dataset: RawDataset, columnMeta: InferredColumnMeta[]) {
-		this.state.dataInput.rawDataset = dataset;
-		this.state.dataInput.columnMeta = columnMeta;
+		this.state = {
+			...this.state,
+			dataInput: {
+				...this.state.dataInput,
+				rawDataset: dataset,
+				columnMeta: columnMeta,
+			},
+		};
 		this.notify();
 	}
 
 	setTargetColumn(columnName: string) {
-		this.state.dataInput.targetColumn = columnName;
+		this.state = {
+			...this.state,
+			dataInput: {
+				...this.state.dataInput,
+				targetColumn: columnName,
+			},
+		};
 		this.notify();
 	}
 
 	setSelectedFeatures(features: string[]) {
-		this.state.dataInput.selectedFeatures = features;
+		this.state = {
+			...this.state,
+			dataInput: {
+				...this.state.dataInput,
+				selectedFeatures: features,
+			},
+		};
 		this.notify();
 	}
 
 	setMissingValueStrategy(column: string, strategy: 'drop' | 'mean' | 'mode') {
-		this.state.dataInput.missingValueStrategy[column] = strategy;
+		this.state = {
+			...this.state,
+			dataInput: {
+				...this.state.dataInput,
+				missingValueStrategy: {
+					...this.state.dataInput.missingValueStrategy,
+					[column]: strategy,
+				},
+			},
+		};
 		this.notify();
 	}
 
 	setNormalization(enabled: boolean) {
-		this.state.dataInput.normalization = enabled;
+		this.state = {
+			...this.state,
+			dataInput: {
+				...this.state.dataInput,
+				normalization: enabled,
+			},
+		};
 		this.notify();
 	}
 

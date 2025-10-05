@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# exported models (keep only README)
+/exported_models/*
+!/exported_models/README.md

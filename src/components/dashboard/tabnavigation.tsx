@@ -55,12 +55,6 @@ export default function TabNavigation({ activeTab, mode }: TabNavigationProps) {
 			name: 'Train & Validate',
 			href: '/dashboard/classroom/train-validate',
 		},
-		{
-			id: 'test-export',
-			number: '04',
-			name: 'Test & Export',
-			href: '/dashboard/classroom/test-export',
-		},
 	];
 
 	// Use state to prevent flickering during mode changes
