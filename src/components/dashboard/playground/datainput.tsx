@@ -302,87 +302,28 @@ export default function DataInputTab() {
 		return selectedDataset ? [{ datasetId: selectedDataset }] : [];
 	};
 
-	const handleEvaluate = async () => {
-		if (isRestrictedModel && viewMode === 'preloaded' && !selectedRecordId)
-			return; // gated
-		const meta: any = { mode: viewMode, generatedAt: new Date().toISOString() };
-		if (viewMode === 'manual')
-			meta.parameters = [...buildManual(), ...buildDirect()];
-		if (viewMode === 'upload') meta.upload = buildUpload();
+	// Determine if input selection is complete for enabling Evaluate
+	const isReady = React.useMemo(() => {
+		if (!viewMode) return false;
+		if (viewMode === 'manual') return true; // manual always ready once selected
+		if (viewMode === 'upload') {
+			return uploadStatus.stage === 'success';
+		}
 		if (viewMode === 'preloaded') {
-			if (isRestrictedModel && selectedRecordId)
-				meta.recordId = selectedRecordId;
-			else if (!isRestrictedModel) meta.datasets = buildPreloaded();
+			if (isRestrictedModel) return !!selectedRecordId; // need a record
+			return !!selectedDataset; // need a dataset
 		}
-		if (viewMode === 'upload' && selectedFile) {
-			try {
-				setLoading();
-				const text = await selectedFile.text();
-				const records = parseCsv(text);
-				if (!records.length) {
-					setError('Uploaded CSV is empty or invalid.');
-				} else {
-					const controller = new AbortController();
-					const timeout = setTimeout(() => controller.abort(), 25000);
-					try {
-						// Placeholder: no batch upload implemented on backend yet for CSV generic data
-						// We map CSV rows to dummy probabilities for now
-						const preds = records.map((_, i) => ({
-							data: i,
-							probability_confirmed: Math.random(),
-							probability_false_positive: Math.random(),
-						}));
-						setResults(records, preds);
-					} finally {
-						clearTimeout(timeout);
-					}
-				}
-			} catch (e: any) {
-				setError(e?.message || 'Failed to get predictions.');
-				console.error('[Prediction API] Error:', e);
-			}
-		}
+		return false;
+	}, [
+		viewMode,
+		uploadStatus.stage,
+		isRestrictedModel,
+		selectedRecordId,
+		selectedDataset,
+	]);
 
-		// Restricted model pathway -> call backend exoplanet predictor with synthetic or fetched flux
-		if (isRestrictedModel && viewMode === 'preloaded' && selectedRecordId) {
-			try {
-				setLoading();
-				// For now generate a synthetic 3197-length flux array (placeholder). In production, fetch real flux by kepid.
-				const flux = Array.from({ length: 3197 }, () =>
-					Number((Math.random() * 0.02).toFixed(6)),
-				);
-				const modelName = selectedModel || 'exoplanet_smote';
-				console.log(
-					'[Evaluate] modelName=',
-					modelName,
-					'flux_len=',
-					flux.length,
-				);
-				const backend = await predictSingle(modelName, flux);
-				console.log('[Exoplanet Prediction] raw backend result:', backend);
-				// Map backend probability (class 1 = without_exoplanet) -> probability_false_positive
-				const probFalse = backend.probability ?? 0;
-				const probConfirmed = 1 - probFalse;
-				setResults(
-					[{ recordId: selectedRecordId }],
-					[
-						{
-							data: { recordId: selectedRecordId },
-							backend_label: backend.label,
-							backend_prediction: backend.prediction,
-							probability_confirmed: probConfirmed,
-							probability_false_positive: probFalse,
-							confidence: backend.confidence,
-							threshold: backend.threshold,
-						},
-					],
-				);
-			} catch (e: any) {
-				console.error('[Exoplanet Prediction] error', e);
-				setError(e?.message || 'Backend prediction failed.');
-			}
-		}
-		sessionStorage.setItem('evaluatePayload', JSON.stringify(meta));
+	const handleEvaluate = () => {
+		if (!isReady) return; // guard
 		router.push('/dashboard/playground/results');
 	};
 
@@ -1131,33 +1072,25 @@ export default function DataInputTab() {
 			{(viewMode === 'manual' ||
 				viewMode === 'upload' ||
 				viewMode === 'preloaded') && (
-				<div className="fixed bottom-8 right-8 z-20">
+				<div className="fixed bottom-6 right-6 z-20">
 					<button
 						onClick={handleEvaluate}
-						aria-label="Evaluate Results"
-						disabled={
-							isRestrictedModel && viewMode === 'preloaded' && !selectedRecordId
-						}
-						className={`rounded-full px-8 py-4 font-semibold text-lg shadow-[0px_0px_10px_1px_rgba(0,0,0,0.12)] transition flex items-center gap-2 ${
-							isRestrictedModel && viewMode === 'preloaded' && !selectedRecordId
-								? 'bg-[var(--input-background)] text-[var(--text-secondary)] border border-[var(--input-border)] cursor-not-allowed'
-								: 'bg-black text-white hover:opacity-90'
+						aria-label={isReady ? 'Evaluate Results' : 'Select input source'}
+						disabled={!isReady}
+						className={`rounded-full px-5 py-3 font-semibold text-sm shadow-[0px_0px_8px_1px_rgba(0,0,0,0.10)] transition flex items-center gap-2 ${
+							isReady
+								? 'bg-black text-white hover:opacity-90'
+								: 'bg-[var(--input-background)] text-[var(--text-secondary)] border border-[var(--input-border)] cursor-not-allowed'
 						}`}
 					>
-						<span>
-							{isRestrictedModel && viewMode === 'preloaded'
-								? selectedRecordId
-									? 'Evaluate'
-									: 'Select a Record'
-								: 'Evaluate'}
-						</span>
+						<span>{isReady ? 'Evaluate' : 'Select Input Source'}</span>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							fill="none"
 							viewBox="0 0 24 24"
 							strokeWidth={2}
 							stroke="currentColor"
-							className="w-5 h-5"
+							className="w-4 h-4"
 						>
 							<path
 								strokeLinecap="round"

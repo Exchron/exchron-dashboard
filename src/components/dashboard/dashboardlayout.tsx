@@ -166,18 +166,18 @@ export default function DashboardLayout({
 		<PredictionProvider>
 			<div className="min-h-screen bg-[#ECECEC] flex">
 				{/* Sidebar */}
-				<aside className="w-[286px] min-h-screen bg-[#F9F9F9] border border-[#D1D1D1] shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] flex flex-col fixed left-0 top-0 bottom-0">
+				<aside className="w-[240px] min-h-screen bg-[#F9F9F9] border border-[#D1D1D1] shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] flex flex-col fixed left-0 top-0 bottom-0">
 					{/* Logo */}
-					<div className="p-8 flex items-center gap-3">
-						<div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+					<div className="p-6 flex items-center gap-3">
+						<div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
 							{/* Placeholder for logo */}
-							<span className="text-2xl font-bold">E</span>
+							<span className="text-xl font-bold">E</span>
 						</div>
-						<h1 className="text-3xl font-bold tracking-tight">Exchron</h1>
+						<h1 className="text-2xl font-bold tracking-tight">Exchron</h1>
 					</div>
 
 					{/* Tab Navigation */}
-					<nav className="px-4 mt-12">
+					<nav className="px-3 mt-8">
 						<TabNavigation activeTab={activeTab} mode={selectedMode} />
 					</nav>
 
@@ -235,19 +235,19 @@ export default function DashboardLayout({
 					</div>
 				</aside>
 
-				<div className="flex-1 ml-[286px] flex flex-col">
+				<div className="flex-1 ml-[240px] flex flex-col">
 					{/* Header - Fixed position */}
-					<header className="fixed top-0 right-0 left-[286px] flex items-center justify-between p-8 z-10 bg-transparent">
+					<header className="fixed top-0 right-0 left-[240px] flex items-center justify-between p-5 z-10 bg-transparent">
 						{/* Mode Selection */}
 						<div
-							className="bg-[var(--input-background)] rounded-lg shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] p-4 relative"
+							className="bg-[var(--input-background)] rounded-lg shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] p-3 relative"
 							ref={dropdownRef}
 						>
 							<div
 								className="flex items-center gap-2 cursor-pointer"
 								onClick={() => setIsDropdownOpen(!isDropdownOpen)}
 							>
-								<span className="font-semibold text-xl">{selectedMode}</span>
+								<span className="font-semibold text-lg">{selectedMode}</span>
 								<svg
 									className={`w-6 h-6 transition-transform duration-200 ${
 										isDropdownOpen ? 'transform rotate-180' : ''
@@ -327,11 +327,11 @@ export default function DashboardLayout({
 							</div>
 						)}
 
-						<div className="flex gap-4">
+						<div className="flex gap-3">
 							{/* Documentation link */}
 							<Link
 								href="#"
-								className="bg-[var(--background)] border border-[var(--input-border)] rounded-xl p-4 flex items-center gap-2 hover:bg-[var(--hover-background)] transition-colors"
+								className="bg-[var(--background)] border border-[var(--input-border)] rounded-xl p-3 flex items-center gap-2 hover:bg-[var(--hover-background)] transition-colors text-sm"
 							>
 								<span className="font-semibold text-[var(--muted-text)]">
 									Visit Documentation
@@ -354,7 +354,7 @@ export default function DashboardLayout({
 							<button
 								ref={askAiButtonRef}
 								onClick={handleAskAIClick}
-								className="bg-white rounded-xl shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] p-4 flex items-center gap-2 hover:bg-[var(--hover-background)] transition-colors"
+								className="bg-white rounded-xl shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] p-3 flex items-center gap-2 hover:bg-[var(--hover-background)] transition-colors text-sm"
 							>
 								<svg
 									className="w-6 h-6"
@@ -370,7 +370,9 @@ export default function DashboardLayout({
 					</header>
 
 					{/* Main content - Add padding top to account for fixed header */}
-					<main className="flex-1 px-8 pt-32 py-4">{children}</main>
+					<main className="flex-1 px-6 pt-28 py-4 text-[var(--text-base)]">
+						{children}
+					</main>
 
 					<AIChatPopup
 						isOpen={isChatOpen}

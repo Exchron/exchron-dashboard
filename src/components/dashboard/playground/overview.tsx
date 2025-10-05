@@ -326,11 +326,16 @@ export default function OverviewTab() {
 
 								<div className="fixed bottom-8 right-8 z-20">
 									<ActionButton
-										href="/dashboard/playground/data-input"
-										ariaLabel="Go to Data Input"
-										icon="arrow-right"
+										href={
+											model ? '/dashboard/playground/data-input' : undefined
+										}
+										ariaLabel={
+											model ? 'Go to Data Input' : 'Select a model first'
+										}
+										icon={model ? 'arrow-right' : 'none'}
+										disabled={!model}
 									>
-										Input Data
+										{model ? 'Input Data' : 'Select Model First'}
 									</ActionButton>
 								</div>
 							</CardContent>
