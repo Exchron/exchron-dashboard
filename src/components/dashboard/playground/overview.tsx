@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardTitle, CardContent } from '../../ui/Card';
-import Link from 'next/link';
 import { ActionButton } from '../../ui/ActionButton';
 import Image from 'next/image';
 import CNN_confusionmatrix from '../../../../assets/CNN/conf_matrix.jpg';
@@ -116,26 +115,7 @@ const numberFormat = (v: number) => (v < 1 ? v.toFixed(4) : v.toFixed(2));
 
 export default function OverviewTab() {
 	const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-	const [lightbox, setLightbox] = useState<{ src: any; alt: string } | null>(
-		null,
-	);
-
-	const openLightbox = (src: any, alt: string) => setLightbox({ src, alt });
-	const closeLightbox = () => setLightbox(null);
-
-	useEffect(() => {
-		if (!lightbox) return;
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') closeLightbox();
-		};
-		window.addEventListener('keydown', onKey);
-		const prev = document.body.style.overflow;
-		document.body.style.overflow = 'hidden';
-		return () => {
-			window.removeEventListener('keydown', onKey);
-			document.body.style.overflow = prev;
-		};
-	}, [lightbox]);
+	// Lightbox functionality removed per revert request; images now static.
 	const model = useMemo(
 		() =>
 			selectedModelId ? MODELS.find((m) => m.id === selectedModelId) : null,
@@ -194,13 +174,7 @@ export default function OverviewTab() {
 								{/* Architecture Visual Only (intrinsic ratio) */}
 								<div className="mt-auto">
 									{model.id === 'exchron-cnn' && (
-										<figure
-											className="mx-auto max-w-[760px] mb-6 text-center cursor-zoom-in"
-											onClick={() =>
-												openLightbox(LightcurveImg, 'EXCHRON_CNN architecture')
-											}
-											title="Click to enlarge"
-										>
+										<figure className="mx-auto max-w-[760px] mb-6 text-center">
 											<Image
 												src={LightcurveImg}
 												alt="EXCHRON_CNN architecture"
@@ -213,16 +187,7 @@ export default function OverviewTab() {
 										</figure>
 									)}
 									{model.id === 'exchron-dnn' && (
-										<figure
-											className="mx-auto max-w-[760px] mb-6 text-center cursor-zoom-in"
-											onClick={() =>
-												openLightbox(
-													featureAnalysisImg,
-													'EXCHRON_DNN architecture',
-												)
-											}
-											title="Click to enlarge"
-										>
+										<figure className="mx-auto max-w-[760px] mb-6 text-center">
 											<Image
 												src={featureAnalysisImg}
 												alt="EXCHRON_DNN architecture"
@@ -281,14 +246,7 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${Historyc.width} / ${Historyc.height}`,
 												}}
-												className="w-full cursor-zoom-in"
-												onClick={() =>
-													openLightbox(
-														Historyc,
-														'EXCHRON_CNN training / validation curves',
-													)
-												}
-												title="Click to enlarge"
+												className="w-full"
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -310,14 +268,7 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${m_data.width} / ${m_data.height}`,
 												}}
-												className="w-full cursor-zoom-in"
-												onClick={() =>
-													openLightbox(
-														m_data,
-														'EXCHRON_DNN training / validation curves',
-													)
-												}
-												title="Click to enlarge"
+												className="w-full"
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -360,11 +311,7 @@ export default function OverviewTab() {
 										<>
 											<figure
 												style={{ aspectRatio: `${roc.width} / ${roc.height}` }}
-												className="w-full cursor-zoom-in"
-												onClick={() =>
-													openLightbox(roc, 'EXCHRON_CNN ROC Curve')
-												}
-												title="Click to enlarge"
+												className="w-full"
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -384,14 +331,7 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${CNN_confusionmatrix.width} / ${CNN_confusionmatrix.height}`,
 												}}
-												className="w-full cursor-zoom-in"
-												onClick={() =>
-													openLightbox(
-														CNN_confusionmatrix,
-														'EXCHRON_CNN Confusion Matrix',
-													)
-												}
-												title="Click to enlarge"
+												className="w-full"
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -415,14 +355,7 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${correlationMatrix.width} / ${correlationMatrix.height}`,
 												}}
-												className="w-full cursor-zoom-in"
-												onClick={() =>
-													openLightbox(
-														correlationMatrix,
-														'EXCHRON_DNN Correlation Matrix',
-													)
-												}
-												title="Click to enlarge"
+												className="w-full"
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -442,14 +375,7 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${D_conf_data.width} / ${D_conf_data.height}`,
 												}}
-												className="w-full cursor-zoom-in"
-												onClick={() =>
-													openLightbox(
-														D_conf_data,
-														'EXCHRON_DNN Confusion Matrix',
-													)
-												}
-												title="Click to enlarge"
+												className="w-full"
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -464,42 +390,6 @@ export default function OverviewTab() {
 														Confusion Matrix
 													</span>
 												</div>
-												{lightbox && (
-													<div
-														className="fixed inset-0 z-50"
-														role="dialog"
-														aria-modal="true"
-														aria-label={lightbox.alt}
-													>
-														<div
-															className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-															onClick={closeLightbox}
-														/>
-														<div className="relative z-10 w-full h-full flex items-center justify-center p-4">
-															<div
-																className="relative w-full max-w-6xl"
-																style={{
-																	aspectRatio: `${lightbox.src.width} / ${lightbox.src.height}`,
-																}}
-															>
-																<Image
-																	src={lightbox.src}
-																	alt={lightbox.alt}
-																	fill
-																	className="object-contain rounded-lg shadow-2xl"
-																	priority
-																/>
-																<button
-																	onClick={closeLightbox}
-																	aria-label="Close image"
-																	className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-white/70"
-																>
-																	✕
-																</button>
-															</div>
-														</div>
-													</div>
-												)}
 											</figure>
 										</>
 									)}
