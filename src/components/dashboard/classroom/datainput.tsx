@@ -11,7 +11,11 @@ import {
 
 // IMPLEMENTATION UPDATE: Import enhanced CSV parser and types
 import { CSVParser } from '../../../lib/ml/parsing/csv';
-import type { ColumnType, InferredColumnMeta, RawDataset } from '../../../types/ml';
+import type {
+	ColumnType,
+	InferredColumnMeta,
+	RawDataset,
+} from '../../../types/ml';
 import { useClassroomStore } from '../../../lib/ml/state/classroomStore';
 
 export default function ClassroomDataInputTab() {
@@ -23,10 +27,12 @@ export default function ClassroomDataInputTab() {
 
 	// IMPLEMENTATION UPDATE: Use classroom store for state management
 	const [classroomState, classroomStore] = useClassroomStore();
-	
+
 	// Local UI state
 	const [showDataPreview, setShowDataPreview] = useState(false);
-	
+	// New popup state for data upload guide & upload UI
+	const [showUploadPopup, setShowUploadPopup] = useState(false);
+
 	// Extract state from store
 	const {
 		selectedDataSource,
@@ -35,27 +41,31 @@ export default function ClassroomDataInputTab() {
 		targetColumn,
 		selectedFeatures,
 		missingValueStrategy,
-		normalization
+		normalization,
 	} = classroomState.dataInput;
 
 	// IMPLEMENTATION UPDATE: Enhanced CSV parsing with validation and store integration
-	const parseCSV = async (csvContent: string, filename: string): Promise<void> => {
+	const parseCSV = async (
+		csvContent: string,
+		filename: string,
+	): Promise<void> => {
 		try {
 			// Use enhanced CSV parser with validation
 			const { rawDataset, columnMeta } = await CSVParser.parseCSV(
-				csvContent, 
+				csvContent,
 				filename,
-				1000 // Limit for performance
+				1000, // Limit for performance
 			);
-			
+
 			// Store the parsed data
 			classroomStore.setRawDataset(rawDataset, columnMeta);
 			setShowDataPreview(true);
 			setParseError(null);
-			
 		} catch (error) {
 			console.error('Enhanced CSV parsing error:', error);
-			setParseError(error instanceof Error ? error.message : 'Unknown parsing error');
+			setParseError(
+				error instanceof Error ? error.message : 'Unknown parsing error',
+			);
 			throw error;
 		}
 	};
@@ -124,20 +134,35 @@ export default function ClassroomDataInputTab() {
 		});
 	};
 
-	// IMPLEMENTATION UPDATE: Load real Kepler dataset with enhanced parsing
-	const loadKeplerDataset = async () => {
+	// Track latest dataset load to avoid race conditions
+	const activeLoadIdRef = useRef(0);
+
+	// IMPLEMENTATION UPDATE: Load real Kepler dataset with enhanced parsing (version-aware)
+	const loadKeplerDataset = async (loadId: number) => {
 		try {
 			setIsParsing(true);
-			const response = await fetch('/kepler_cleaned_28_features.csv');
+			// Fetch KOI classroom CSV through API (ensures server-side file access & future preprocessing)
+			const response = await fetch('/api/classroom/koi');
 			if (!response.ok) {
-				throw new Error('Failed to load Kepler dataset');
+				throw new Error('Failed to load KOI classroom dataset');
 			}
 
 			const csvContent = await response.text();
-			await parseCSV(csvContent, 'kepler_cleaned_28_features.csv');
+			// If a newer selection happened while fetching, abort applying
+			if (loadId !== activeLoadIdRef.current) return;
+			await parseCSV(csvContent, 'KOI-Classroom-Data.csv');
 
 			// Auto-select target and features for Kepler dataset
-			const targetCol = 'koi_disposition';
+			// Attempt to detect a suitable target column - fall back to first categorical/boolean
+			const metaAfter = classroomStore.getState().dataInput.columnMeta;
+			let targetCol = 'koi_disposition';
+			if (!metaAfter?.some((m) => m.name === targetCol)) {
+				const candidate = metaAfter?.find(
+					(m) =>
+						m.inferredType === 'categorical' || m.inferredType === 'boolean',
+				);
+				if (candidate) targetCol = candidate.name;
+			}
 			const features = [
 				'koi_period',
 				'koi_impact',
@@ -155,20 +180,109 @@ export default function ClassroomDataInputTab() {
 				'dec',
 			];
 
-			classroomStore.setTargetColumn(targetCol);
-			classroomStore.setSelectedFeatures(features);
+			if (loadId === activeLoadIdRef.current) {
+				classroomStore.setTargetColumn(targetCol);
+				classroomStore.setSelectedFeatures(features);
+			}
 		} catch (error) {
 			console.error('Kepler dataset loading error:', error);
 			setParseError(
 				'Failed to load Kepler dataset. Please try uploading your own data.',
 			);
 		} finally {
-			setIsParsing(false);
+			if (loadId === activeLoadIdRef.current) setIsParsing(false);
 		}
 	};
 
-	// IMPLEMENTATION UPDATE: Load sample dataset with enhanced parsing
-	const loadSampleDataset = async (source: string) => {
+	// NEW: Load K2 dataset (version-aware)
+	const loadK2Dataset = async (loadId: number) => {
+		try {
+			setIsParsing(true);
+			const response = await fetch('/api/classroom/k2');
+			if (!response.ok) {
+				throw new Error('Failed to load K2 classroom dataset');
+			}
+			const csvContent = await response.text();
+			if (loadId !== activeLoadIdRef.current) return;
+			await parseCSV(csvContent, 'K2-Classroom-Data.csv');
+
+			// Infer sensible target (reuse koi_disposition fallback logic style)
+			const metaAfter = classroomStore.getState().dataInput.columnMeta;
+			let targetCol = 'k2_disposition';
+			if (!metaAfter?.some((m) => m.name === targetCol)) {
+				const candidate = metaAfter?.find(
+					(m) =>
+						m.inferredType === 'categorical' || m.inferredType === 'boolean',
+				);
+				if (candidate) targetCol = candidate.name;
+			}
+
+			// Select numeric/categorical features excluding target
+			const features =
+				metaAfter
+					?.filter(
+						(m) =>
+							m.name !== targetCol &&
+							(m.inferredType === 'numeric' ||
+								m.inferredType === 'categorical'),
+					)
+					.map((m) => m.name) || [];
+
+			if (loadId === activeLoadIdRef.current) {
+				classroomStore.setTargetColumn(targetCol);
+				classroomStore.setSelectedFeatures(features);
+			}
+		} catch (error) {
+			console.error('K2 dataset loading error:', error);
+			setParseError('Failed to load K2 dataset.');
+		} finally {
+			if (loadId === activeLoadIdRef.current) setIsParsing(false);
+		}
+	};
+
+	// NEW: Load TESS dataset (version-aware)
+	const loadTessDataset = async (loadId: number) => {
+		try {
+			setIsParsing(true);
+			const response = await fetch('/api/classroom/tess');
+			if (!response.ok) {
+				throw new Error('Failed to load TESS classroom dataset');
+			}
+			const csvContent = await response.text();
+			if (loadId !== activeLoadIdRef.current) return;
+			await parseCSV(csvContent, 'TESS-Classroom-Data.csv');
+			const metaAfter = classroomStore.getState().dataInput.columnMeta;
+			let targetCol = 'tess_disposition';
+			if (!metaAfter?.some((m) => m.name === targetCol)) {
+				const candidate = metaAfter?.find(
+					(m) =>
+						m.inferredType === 'categorical' || m.inferredType === 'boolean',
+				);
+				if (candidate) targetCol = candidate.name;
+			}
+			const features =
+				metaAfter
+					?.filter(
+						(m) =>
+							m.name !== targetCol &&
+							(m.inferredType === 'numeric' ||
+								m.inferredType === 'categorical'),
+					)
+					.map((m) => m.name) || [];
+			if (loadId === activeLoadIdRef.current) {
+				classroomStore.setTargetColumn(targetCol);
+				classroomStore.setSelectedFeatures(features);
+			}
+		} catch (error) {
+			console.error('TESS dataset loading error:', error);
+			setParseError('Failed to load TESS dataset.');
+		} finally {
+			if (loadId === activeLoadIdRef.current) setIsParsing(false);
+		}
+	};
+
+	// IMPLEMENTATION UPDATE: Load sample dataset with enhanced parsing (version-aware)
+	const loadSampleDataset = async (source: string, loadId: number) => {
 		const sampleCSV = `planet_name,radius,mass,t_eff,logg,disposition
 KEPLER-1088.01,8,1.8,6129.0,4.24,CONFIRMED
 KEPLER-1089.01,5,0.9,5270.0,4.54,CANDIDATE
@@ -182,22 +296,27 @@ KEPLER-115.01,5.5,1.1,5678.0,4.47,CONFIRMED
 KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 
 		try {
+			// If a newer selection already happened, bail early before heavy work
+			if (loadId !== activeLoadIdRef.current) return;
 			await parseCSV(sampleCSV, `${source}-sample.csv`);
 
 			// Auto-select target and features for sample data
 			const targetCol = 'disposition';
 			const currentMeta = classroomStore.getState().dataInput.columnMeta;
-			const features = currentMeta
-				?.filter(
-					(col) =>
-						col.name !== targetCol &&
-						(col.inferredType === 'numeric' ||
-							col.inferredType === 'categorical'),
-				)
-				.map((col) => col.name) || [];
+			const features =
+				currentMeta
+					?.filter(
+						(col) =>
+							col.name !== targetCol &&
+							(col.inferredType === 'numeric' ||
+								col.inferredType === 'categorical'),
+					)
+					.map((col) => col.name) || [];
 
-			classroomStore.setTargetColumn(targetCol);
-			classroomStore.setSelectedFeatures(features);
+			if (loadId === activeLoadIdRef.current) {
+				classroomStore.setTargetColumn(targetCol);
+				classroomStore.setSelectedFeatures(features);
+			}
 		} catch (error) {
 			console.error('Sample dataset loading error:', error);
 		}
@@ -205,30 +324,54 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 
 	// Load real Kepler data on component mount
 	useEffect(() => {
+		const initialLoadId = ++activeLoadIdRef.current;
 		if (selectedDataSource === 'kepler' && !rawDataset) {
-			loadKeplerDataset();
+			loadKeplerDataset(initialLoadId);
+		} else if (selectedDataSource === 'k2' && !rawDataset) {
+			loadK2Dataset(initialLoadId);
+		} else if (selectedDataSource === 'tess' && !rawDataset) {
+			loadTessDataset(initialLoadId);
 		} else if (
 			selectedDataSource !== 'own' &&
 			selectedDataSource !== 'kepler' &&
+			selectedDataSource !== 'k2' &&
+			selectedDataSource !== 'tess' &&
 			!rawDataset
 		) {
-			loadSampleDataset(selectedDataSource);
+			loadSampleDataset(selectedDataSource, initialLoadId);
 		}
+		if (selectedDataSource === 'own') {
+			setShowUploadPopup(true);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	// IMPLEMENTATION UPDATE: Handle data source selection with store integration
 	const handleDataSourceChange = (source: string) => {
+		// Increment load version
+		const loadId = ++activeLoadIdRef.current;
 		classroomStore.setDataSource(source as any);
+		setParseError(null);
 		if (source === 'kepler') {
-			loadKeplerDataset();
-		} else if (source !== 'own') {
-			loadSampleDataset(source);
-		} else {
+			loadKeplerDataset(loadId);
+			setShowUploadPopup(false);
+		} else if (source === 'k2') {
+			loadK2Dataset(loadId);
+			setShowUploadPopup(false);
+		} else if (source === 'tess') {
+			loadTessDataset(loadId);
+			setShowUploadPopup(false);
+		} else if (source === 'own') {
 			// Reset for own data upload
 			classroomStore.setRawDataset(undefined as any, []);
 			classroomStore.setTargetColumn('');
 			classroomStore.setSelectedFeatures([]);
 			setShowDataPreview(false);
+			setIsParsing(false);
+			setShowUploadPopup(true); // auto open popup
+		} else {
+			loadSampleDataset(source, loadId);
+			setShowUploadPopup(false);
 		}
 	};
 
@@ -255,7 +398,7 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 	// IMPLEMENTATION UPDATE: Handle column type override (not implemented in store yet)
 	const handleColumnTypeChange = (columnIndex: number, newType: ColumnType) => {
 		if (!columnMeta) return;
-		
+
 		const updatedMeta = [...columnMeta];
 		updatedMeta[columnIndex] = {
 			...updatedMeta[columnIndex],
@@ -320,14 +463,15 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 
 			// Auto-select features (numeric and categorical columns)
 			const currentMeta = classroomStore.getState().dataInput.columnMeta;
-			const features = currentMeta
-				?.filter(
-					(col) =>
-						col.inferredType === 'numeric' ||
-						col.inferredType === 'categorical',
-				)
-				.map((col) => col.name) || [];
-			
+			const features =
+				currentMeta
+					?.filter(
+						(col) =>
+							col.inferredType === 'numeric' ||
+							col.inferredType === 'categorical',
+					)
+					.map((col) => col.name) || [];
+
 			classroomStore.setSelectedFeatures(features);
 			classroomStore.setDataSource('own');
 		} catch (error) {
@@ -344,7 +488,7 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 	};
 
 	return (
-		<div className="grid grid-cols-1 gap-6">
+		<div className="grid grid-cols-1 gap-6 relative">
 			{/* Workflow Navigation */}
 			<div className="flex items-center justify-center w-full mb-2">
 				<div className="flex items-center space-x-2 md:space-x-4 bg-white px-6 py-3 rounded-xl shadow-sm">
@@ -397,227 +541,178 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 				</div>
 			</div>
 
-			<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-				{/* First row - left */}
-				<div className="lg:col-span-6">
-					<Card>
-						<CardTitle>Select a Data Source</CardTitle>
-						<CardContent>
-							<p className="mb-4">
-								Select a data source to create your custom model. We've
-								pre-processed several datasets as starting points for your
-								training. Visit our documentation for detailed information about
-								each dataset and their characteristics.
-							</p>
+			<div className="grid grid-cols-1 gap-4">
+				{/* Data Source Card (expanded width) */}
+				<Card className="w-full">
+					<CardTitle className="flex items-center justify-between">
+						<span>Select a Data Source</span>
+					</CardTitle>
+					<CardContent>
+						<p className="mb-4">
+							Select a data source to create your custom model. We've
+							pre-processed several datasets as starting points for your
+							training. Visit our documentation for detailed information about
+							each dataset and their characteristics.
+						</p>
 
-							<div className="space-y-3 mt-6">
-								{/* Kepler Database */}
-								<div
-									className={`flex items-center p-3 rounded-lg border transition-all ${
-										selectedDataSource === 'kepler'
-											? 'border-black bg-gray-50 shadow-sm'
-											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-									}`}
-								>
-									<div
-										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
-										onClick={() => handleDataSourceChange('kepler')}
-									>
-										{selectedDataSource === 'kepler' && (
-											<div className="w-3 h-3 bg-black rounded-full"></div>
-										)}
-									</div>
-									<div className="ml-3 flex-1">
+						<div className="space-y-3 mt-6 max-w-3xl">
+							<fieldset
+								className="space-y-3"
+								aria-label="Dataset Source"
+								onKeyDown={(e) => {
+									const order = ['kepler', 'k2', 'tess', 'own'] as const;
+									const idx = order.indexOf(selectedDataSource as any);
+									if (['ArrowDown', 'ArrowRight'].includes(e.key)) {
+										e.preventDefault();
+										const next = order[(idx + 1) % order.length];
+										handleDataSourceChange(next);
+									} else if (['ArrowUp', 'ArrowLeft'].includes(e.key)) {
+										e.preventDefault();
+										const prev = order[(idx - 1 + order.length) % order.length];
+										handleDataSourceChange(prev);
+									}
+								}}
+							>
+								{[
+									{
+										value: 'kepler',
+										label: 'Kepler Database (9,566 exoplanet candidates)',
+										desc: 'Real NASA data with 28 astronomical features',
+										accent: 'black',
+									},
+									{
+										value: 'k2',
+										label: 'K2 Database',
+										desc: 'Extended Kepler mission data',
+										accent: 'black',
+									},
+									{
+										value: 'tess',
+										label: 'TESS Database',
+										desc: 'Transiting Exoplanet Survey Satellite data',
+										accent: 'black',
+									},
+									{
+										value: 'own',
+										label: 'Upload your own Data',
+										desc: '🎯 Custom data upload mode activated',
+										accent: 'blue',
+									},
+								].map((opt) => {
+									const active = selectedDataSource === opt.value;
+									const accentColor =
+										opt.accent === 'blue' ? 'blue-500' : 'black';
+									return (
 										<label
-											className="text-sm font-medium cursor-pointer"
-											onClick={() => handleDataSourceChange('kepler')}
-										>
-											Kepler Database (9,566 exoplanet candidates)
-										</label>
-										{selectedDataSource === 'kepler' && (
-											<p className="text-xs text-gray-600 mt-1">
-												Real NASA data with 28 astronomical features
-											</p>
-										)}
-									</div>
-								</div>
-
-								{/* K2 Database */}
-								<div
-									className={`flex items-center p-3 rounded-lg border transition-all ${
-										selectedDataSource === 'k2'
-											? 'border-black bg-gray-50 shadow-sm'
-											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-									}`}
-								>
-									<div
-										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
-										onClick={() => handleDataSourceChange('k2')}
-									>
-										{selectedDataSource === 'k2' && (
-											<div className="w-3 h-3 bg-black rounded-full"></div>
-										)}
-									</div>
-									<div className="ml-3 flex-1">
-										<label
-											className="text-sm font-medium cursor-pointer"
-											onClick={() => handleDataSourceChange('k2')}
-										>
-											K2 Database
-										</label>
-										{selectedDataSource === 'k2' && (
-											<p className="text-xs text-gray-600 mt-1">
-												Extended Kepler mission data
-											</p>
-										)}
-									</div>
-								</div>
-
-								{/* TESS Database */}
-								<div
-									className={`flex items-center p-3 rounded-lg border transition-all ${
-										selectedDataSource === 'tess'
-											? 'border-black bg-gray-50 shadow-sm'
-											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-									}`}
-								>
-									<div
-										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
-										onClick={() => handleDataSourceChange('tess')}
-									>
-										{selectedDataSource === 'tess' && (
-											<div className="w-3 h-3 bg-black rounded-full"></div>
-										)}
-									</div>
-									<div className="ml-3 flex-1">
-										<label
-											className="text-sm font-medium cursor-pointer"
-											onClick={() => handleDataSourceChange('tess')}
-										>
-											TESS Database
-										</label>
-										{selectedDataSource === 'tess' && (
-											<p className="text-xs text-gray-600 mt-1">
-												Transiting Exoplanet Survey Satellite data
-											</p>
-										)}
-									</div>
-								</div>
-
-								{/* Combined Database */}
-								<div
-									className={`flex items-center p-3 rounded-lg border transition-all ${
-										selectedDataSource === 'combined'
-											? 'border-black bg-gray-50 shadow-sm'
-											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-									}`}
-								>
-									<div
-										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
-										onClick={() => handleDataSourceChange('combined')}
-									>
-										{selectedDataSource === 'combined' && (
-											<div className="w-3 h-3 bg-black rounded-full"></div>
-										)}
-									</div>
-									<div className="ml-3 flex-1">
-										<label
-											className="text-sm font-medium cursor-pointer"
-											onClick={() => handleDataSourceChange('combined')}
-										>
-											Kepler, K2 & TESS Combined
-										</label>
-										{selectedDataSource === 'combined' && (
-											<p className="text-xs text-gray-600 mt-1">
-												Comprehensive multi-mission dataset
-											</p>
-										)}
-									</div>
-								</div>
-
-								{/* Upload Own Data */}
-								<div
-									className={`flex items-center p-3 rounded-lg border transition-all ${
-										selectedDataSource === 'own'
-											? 'border-blue-500 bg-blue-50 shadow-sm'
-											: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-									}`}
-								>
-									<div
-										className="w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer"
-										onClick={() => handleDataSourceChange('own')}
-									>
-										{selectedDataSource === 'own' && (
-											<div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-										)}
-									</div>
-									<div className="ml-3 flex-1">
-										<label
-											className={`text-sm font-medium cursor-pointer ${
-												selectedDataSource === 'own' ? 'text-blue-700' : ''
+											key={opt.value}
+											className={`flex items-center p-3 rounded-lg border transition-all cursor-pointer select-none ${
+												active
+													? opt.accent === 'blue'
+														? 'border-blue-500 bg-blue-50 shadow-sm'
+														: 'border-black bg-gray-50 shadow-sm'
+													: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
 											}`}
-											onClick={() => handleDataSourceChange('own')}
 										>
-											Upload your own Data
+											<input
+												type="radio"
+												name="dataset-source"
+												value={opt.value}
+												checked={active}
+												onChange={() => handleDataSourceChange(opt.value)}
+												className="sr-only"
+											/>
+											<div
+												className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+													active
+														? opt.accent === 'blue'
+															? 'border-blue-500'
+															: 'border-black'
+														: ''
+												}`}
+											>
+												{active && (
+													<div
+														className={`w-3 h-3 rounded-full ${
+															opt.accent === 'blue' ? 'bg-blue-500' : 'bg-black'
+														}`}
+													></div>
+												)}
+											</div>
+											<div className="ml-3 flex-1">
+												<span
+													className={`text-sm font-medium ${
+														active && opt.accent === 'blue'
+															? 'text-blue-700'
+															: ''
+													}`}
+												>
+													{opt.label}
+												</span>
+												{active && (
+													<p
+														className={`text-xs mt-1 ${
+															opt.accent === 'blue'
+																? 'text-blue-600'
+																: 'text-gray-600'
+														}`}
+													>
+														{opt.desc}
+													</p>
+												)}
+											</div>
 										</label>
-										{selectedDataSource === 'own' && (
-											<p className="text-xs text-blue-600 mt-1">
-												🎯 Custom data upload mode activated - see guide panel →
-											</p>
-										)}
-									</div>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
-				</div>
+									);
+								})}
+							</fieldset>
+						</div>
+					</CardContent>
+				</Card>
 
-				{/* First row - right - Guide Section (conditionally styled) */}
-				<div className="lg:col-span-6">
-					<Card
-						className={
-							selectedDataSource === 'own'
-								? 'border-2 border-blue-200 bg-blue-50 flex flex-col h-full'
-								: 'flex flex-col h-full'
-						}
-					>
-						<CardTitle
-							className={selectedDataSource === 'own' ? 'text-blue-800' : ''}
-						>
-							Data Upload Guide & Upload Your Own Data
-							{selectedDataSource === 'own' && (
-								<span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-									ACTIVE
-								</span>
-							)}
-						</CardTitle>
-						<CardContent className="flex flex-col lg:flex-row gap-6 min-h-[340px]">
-							<div className="flex-1 flex flex-col justify-between">
-								<div>
-									<p
-										className={`text-sm mb-4 ${
-											selectedDataSource === 'own' ? 'text-blue-700' : ''
-										}`}
+				{/* Popup Modal for Upload & Guide */}
+				{showUploadPopup && (
+					<div className="fixed inset-0 z-40 flex items-center justify-center">
+						<div
+							className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+							onClick={() => setShowUploadPopup(false)}
+						></div>
+						<div className="relative z-50 w-full max-w-4xl bg-white rounded-2xl shadow-xl border border-gray-300 max-h-[90vh] overflow-y-auto p-6">
+							<div className="flex items-start justify-between mb-4">
+								<h2 className="text-lg font-semibold">
+									Data Upload Guide & Upload Your Own Data
+								</h2>
+								<button
+									aria-label="Close"
+									onClick={() => setShowUploadPopup(false)}
+									className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center hover:bg-gray-100"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth={1.5}
+										className="w-5 h-5"
 									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											d="M6 18L18 6M6 6l12 12"
+										/>
+									</svg>
+								</button>
+							</div>
+							<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+								<div>
+									<p className="text-sm mb-4">
 										{selectedDataSource === 'own'
 											? 'Follow this format to prepare your data. Download the template below for the exact structure required.'
 											: 'Your data should be uploaded in the following format. Download the sample .csv file to get an idea or visit documentation for more information.'}
 									</p>
 									<button
 										onClick={handleDownloadTemplate}
-										className={`border rounded-xl p-4 flex items-center w-full transition-colors ${
-											selectedDataSource === 'own'
-												? 'bg-blue-100 border-blue-300 hover:bg-blue-200'
-												: 'bg-[#f9f9f9] border-[#afafaf] hover:bg-gray-100'
-										}`}
+										className="border rounded-xl p-4 flex items-center w-full transition-colors bg-[#f9f9f9] border-[#afafaf] hover:bg-gray-100"
 									>
-										<div
-											className={`w-10 h-10 mr-4 ${
-												selectedDataSource === 'own'
-													? 'text-blue-600'
-													: 'text-gray-500'
-											}`}
-										>
+										<div className="w-10 h-10 mr-4 text-gray-600">
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
 												fill="none"
@@ -634,42 +729,27 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											</svg>
 										</div>
 										<div>
-											<p
-												className={`font-semibold text-base text-left ${
-													selectedDataSource === 'own' ? 'text-blue-800' : ''
-												}`}
-											>
+											<p className="font-semibold text-base text-left">
 												Download template file
 											</p>
-											<p
-												className={`text-left ${
-													selectedDataSource === 'own'
-														? 'text-blue-600'
-														: 'text-neutral-500'
-												}`}
-											>
+											<p className="text-left text-neutral-500">
 												kepler-template.csv
 											</p>
 										</div>
 									</button>
-									{selectedDataSource === 'own' && (
-										<div className="mt-4 p-3 bg-blue-100 rounded-lg border border-blue-200">
-											<h4 className="text-sm font-medium text-blue-800 mb-2">
-												📋 Upload Requirements:
-											</h4>
-											<ul className="text-xs text-blue-700 space-y-1">
-												<li>• CSV format with header row</li>
-												<li>• At least 5 rows of data for training</li>
-												<li>• Include both features and target column</li>
-												<li>• Use numeric values where possible</li>
-											</ul>
-										</div>
-									)}
+									<div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+										<h4 className="text-sm font-medium text-blue-800 mb-2">
+											📋 Upload Requirements:
+										</h4>
+										<ul className="text-xs text-blue-700 space-y-1">
+											<li>• CSV format with header row</li>
+											<li>• At least 5 rows of data for training</li>
+											<li>• Include both features and target column</li>
+											<li>• Use numeric values where possible</li>
+										</ul>
+									</div>
 								</div>
-							</div>
-							{/* Upload UI always visible in own mode */}
-							{selectedDataSource === 'own' && (
-								<div className="flex-1 flex flex-col justify-center items-center">
+								<div className="flex flex-col">
 									<input
 										type="file"
 										ref={fileInputRef}
@@ -683,7 +763,7 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											border: '2px solid #000',
 											borderRadius: '0.75rem',
 										}}
-										className="flex flex-col items-center justify-center w-full h-full bg-white transition-colors"
+										className="flex flex-col items-center justify-center w-full h-64 bg-white transition-colors"
 										disabled={isUploading}
 									>
 										{isUploading ? (
@@ -732,13 +812,19 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											See documentation for data format requirements.
 										</p>
 									</button>
+									<div className="mt-4 flex justify-end">
+										<button
+											onClick={() => setShowUploadPopup(false)}
+											className="text-sm px-4 py-2 rounded-md border border-gray-300 bg-white hover:bg-gray-100"
+										>
+											Done
+										</button>
+									</div>
 								</div>
-							)}
-						</CardContent>
-					</Card>
-				</div>
-
-				{/* Second row - upload area (conditionally shown) */}
+							</div>
+						</div>
+					</div>
+				)}
 
 				{/* Third row - Overview */}
 				<div className="lg:col-span-6">
@@ -778,7 +864,8 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 										onClick={() => {
 											setParseError(null);
 											if (selectedDataSource === 'kepler') {
-												loadKeplerDataset();
+												const retryLoadId = ++activeLoadIdRef.current;
+												loadKeplerDataset(retryLoadId);
 											}
 										}}
 										className="mt-2 text-sm text-red-600 underline hover:text-red-800"
@@ -804,55 +891,76 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											</p>
 										</div>
 									)}
-							<p className="mb-4">
-								Dataset "{rawDataset.name}" contains{' '}
-								{rawDataset.rows.length} samples with {columnMeta?.length || 0}{' '}
-								columns. The data has been automatically analyzed for column
-								types and missing values.
-								{selectedDataSource === 'kepler' &&
-									rawDataset.rows.length === 1000 && (
-										<span className="block text-sm text-blue-600 mt-2">
-											📊 Showing first 1,000 rows of 9,566 total for
-											performance. Full dataset will be used for training.
-										</span>
+									{selectedDataSource === 'k2' && (
+										<div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
+											<h5 className="text-sm font-medium text-indigo-800 mb-2">
+												About the K2 Dataset
+											</h5>
+											<p className="text-xs text-indigo-700">
+												This dataset contains observations from the extended K2
+												mission, providing additional exoplanet candidates and
+												stellar measurements across different fields of view.
+												Feature availability may differ from the original Kepler
+												dataset; automatic inference has been applied.
+											</p>
+										</div>
 									)}
-							</p>
-
-							{/* Column type summary */}
-							<div className="mb-4">
-								<h4 className="text-sm font-medium mb-2">Column Types:</h4>
-								<div className="grid grid-cols-2 gap-2 text-xs">
-									<div>
-										Numeric:{' '}
-										{
-											columnMeta?.filter((c) => c.inferredType === 'numeric')
-												.length || 0
-										}
-									</div>
-									<div>
-										Categorical:{' '}
-										{
-											columnMeta?.filter(
-												(c) => c.inferredType === 'categorical',
-											).length || 0
-										}
-									</div>
-									<div>
-										Boolean:{' '}
-										{
-											columnMeta?.filter((c) => c.inferredType === 'boolean')
-												.length || 0
-										}
-									</div>
-									<div>
-										Text:{' '}
-										{
-											columnMeta?.filter((c) => c.inferredType === 'text')
-												.length || 0
-										}
-									</div>
-								</div>
-							</div>									{/* Target column selection */}
+									{selectedDataSource === 'tess' && (
+										<div className="bg-pink-50 border border-pink-200 rounded-lg p-4 mb-4">
+											<h5 className="text-sm font-medium text-pink-800 mb-2">
+												About the TESS Dataset
+											</h5>
+											<p className="text-xs text-pink-700">
+												This dataset includes candidates from the Transiting
+												Exoplanet Survey Satellite (TESS) mission, covering
+												nearly the entire sky to identify planets around bright
+												nearby stars. Feature composition differs from
+												Kepler/K2; the system has inferred datatypes and
+												suggested features automatically.
+											</p>
+										</div>
+									)}
+									<p className="mb-4">
+										Dataset "{rawDataset.name}" contains{' '}
+										{rawDataset.rows.length} samples with{' '}
+										{columnMeta?.length || 0} columns. The data has been
+										automatically analyzed for column types and missing values.
+										{selectedDataSource === 'kepler' &&
+											rawDataset.rows.length === 1000 && (
+												<span className="block text-sm text-blue-600 mt-2">
+													📊 Showing first 1,000 rows of 9,566 total for
+													performance. Full dataset will be used for training.
+												</span>
+											)}
+									</p>
+									{/* Column type summary */}
+									<div className="mb-4">
+										<h4 className="text-sm font-medium mb-2">Column Types:</h4>
+										<div className="grid grid-cols-2 gap-2 text-xs">
+											<div>
+												Numeric:{' '}
+												{columnMeta?.filter((c) => c.inferredType === 'numeric')
+													.length || 0}
+											</div>
+											<div>
+												Categorical:{' '}
+												{columnMeta?.filter(
+													(c) => c.inferredType === 'categorical',
+												).length || 0}
+											</div>
+											<div>
+												Boolean:{' '}
+												{columnMeta?.filter((c) => c.inferredType === 'boolean')
+													.length || 0}
+											</div>
+											<div>
+												Text:{' '}
+												{columnMeta?.filter((c) => c.inferredType === 'text')
+													.length || 0}
+											</div>
+										</div>
+									</div>{' '}
+									{/* Target column selection */}
 									<div className="mb-4">
 										<h4 className="text-sm font-medium mb-2">
 											Target Column (what to predict):
@@ -877,7 +985,6 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 												))}
 										</select>
 									</div>
-
 									{/* Dataset preview section */}
 									<div className="mt-6">
 										<h4 className="text-sm font-medium mb-2">
@@ -917,7 +1024,6 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											</table>
 										</div>
 									</div>
-
 									{targetColumn && (
 										<div className="mt-4">
 											<h4 className="text-sm font-medium mb-2">
@@ -1059,11 +1165,12 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 													'Position & Timing',
 													'Other',
 												].map((category) => {
-													const categoryFeatures = columnMeta?.filter(
-														(col) =>
-															col.name !== targetColumn &&
-															getFeatureCategory(col.name) === category,
-													) || [];
+													const categoryFeatures =
+														columnMeta?.filter(
+															(col) =>
+																col.name !== targetColumn &&
+																getFeatureCategory(col.name) === category,
+														) || [];
 
 													if (categoryFeatures.length === 0) return null;
 
@@ -1089,9 +1196,9 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 																				<div className="flex items-center mb-1">
 																					<input
 																						type="checkbox"
-																						checked={(selectedFeatures || []).includes(
-																							col.name,
-																						)}
+																						checked={(
+																							selectedFeatures || []
+																						).includes(col.name)}
 																						onChange={() =>
 																							handleFeatureToggle(col.name)
 																						}
@@ -1148,9 +1255,9 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 																	<div className="flex items-center mb-1">
 																		<input
 																			type="checkbox"
-																			checked={(selectedFeatures || []).includes(
-																				col.name,
-																			)}
+																			checked={(
+																				selectedFeatures || []
+																			).includes(col.name)}
 																			onChange={() =>
 																				handleFeatureToggle(col.name)
 																			}
