@@ -12,6 +12,7 @@ import {
 	InferredColumnMeta,
 	PreparedDataset,
 	TrainingRun,
+	ParseStats,
 } from '../../../types/ml';
 
 type StateListener = (state: ClassroomState) => void;
@@ -90,13 +91,29 @@ class ClassroomStore {
 		this.notify();
 	}
 
-	setRawDataset(dataset: RawDataset, columnMeta: InferredColumnMeta[]) {
+	setRawDataset(
+		dataset: RawDataset,
+		columnMeta: InferredColumnMeta[],
+		parseStats?: ParseStats,
+	) {
 		this.state = {
 			...this.state,
 			dataInput: {
 				...this.state.dataInput,
 				rawDataset: dataset,
 				columnMeta: columnMeta,
+				parseStats: parseStats ?? this.state.dataInput.parseStats,
+			},
+		};
+		this.notify();
+	}
+
+	setParseStats(parseStats: ParseStats) {
+		this.state = {
+			...this.state,
+			dataInput: {
+				...this.state.dataInput,
+				parseStats,
 			},
 		};
 		this.notify();

@@ -120,10 +120,16 @@ export default function ClassroomTrainValidateTab() {
 				fileName = 'KOI-Classroom-Data.csv';
 		}
 
+		// Sanitize feature list against actual header to avoid missing column errors
+		const headerSet = new Set(rawDataset?.header || []);
+		const cleanedFeatures = (selectedFeatures || []).filter((f: string) =>
+			headerSet.has(f),
+		);
+
 		return {
 			fileName,
 			targetColumn: targetColumn || '',
-			featureColumns: selectedFeatures || [],
+			featureColumns: cleanedFeatures,
 			rawDataset,
 		};
 	};

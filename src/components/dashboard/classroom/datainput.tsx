@@ -48,17 +48,15 @@ export default function ClassroomDataInputTab() {
 	const parseCSV = async (
 		csvContent: string,
 		filename: string,
+		options?: any,
 	): Promise<void> => {
 		try {
-			// Use enhanced CSV parser with validation
-			const { rawDataset, columnMeta } = await CSVParser.parseCSV(
+			const { rawDataset, columnMeta, parseStats } = await CSVParser.parseCSV(
 				csvContent,
 				filename,
-				1000, // Limit for performance
+				options || { maxRows: 1000 },
 			);
-
-			// Store the parsed data
-			classroomStore.setRawDataset(rawDataset, columnMeta);
+			classroomStore.setRawDataset(rawDataset, columnMeta, parseStats);
 			setShowDataPreview(true);
 			setParseError(null);
 		} catch (error) {
@@ -68,6 +66,43 @@ export default function ClassroomDataInputTab() {
 			);
 			throw error;
 		}
+	};
+
+	// Generic inference for target and features (dataset-agnostic)
+	const inferTargetAndFeatures = (meta: InferredColumnMeta[]) => {
+		if (!meta) return;
+		// Attempt: prefer categorical column with 2-30 unique values, not id-like, with balanced-ish distribution
+		let target: string | undefined;
+		const categoricalCandidates = meta.filter(
+			(m) => m.inferredType === 'categorical' || m.inferredType === 'boolean',
+		);
+		for (const col of categoricalCandidates) {
+			const uniq = col.uniqueValues?.length || 0;
+			if (uniq >= 2 && uniq <= 30 && !/id$|uuid|identifier/i.test(col.name)) {
+				target = col.name;
+				break;
+			}
+		}
+		// Fallback to first categorical/boolean if no good candidate
+		if (!target && categoricalCandidates.length > 0)
+			target = categoricalCandidates[0].name;
+		if (!target) return; // can't proceed yet
+
+		// Feature candidates: numeric + categorical (excluding target). Avoid extremely high-cardinality categorical (> 100 unique)
+		const features = meta
+			.filter(
+				(m) =>
+					m.name !== target &&
+					(m.inferredType === 'numeric' ||
+						(m.inferredType === 'categorical' &&
+							(m.uniqueValues?.length || 0) <= 100)),
+			)
+			.map((m) => m.name)
+			.slice(0, 60); // cap for performance
+
+		if (features.length === 0) return;
+		classroomStore.setTargetColumn(target);
+		classroomStore.setSelectedFeatures(features);
 	};
 
 	const inferColumnType = (values: string[]): ColumnType => {
@@ -151,39 +186,8 @@ export default function ClassroomDataInputTab() {
 			// If a newer selection happened while fetching, abort applying
 			if (loadId !== activeLoadIdRef.current) return;
 			await parseCSV(csvContent, 'KOI-Classroom-Data.csv');
-
-			// Auto-select target and features for Kepler dataset
-			// Attempt to detect a suitable target column - fall back to first categorical/boolean
-			const metaAfter = classroomStore.getState().dataInput.columnMeta;
-			let targetCol = 'koi_disposition';
-			if (!metaAfter?.some((m) => m.name === targetCol)) {
-				const candidate = metaAfter?.find(
-					(m) =>
-						m.inferredType === 'categorical' || m.inferredType === 'boolean',
-				);
-				if (candidate) targetCol = candidate.name;
-			}
-			const features = [
-				'koi_period',
-				'koi_impact',
-				'koi_duration',
-				'koi_depth',
-				'koi_prad',
-				'koi_teq',
-				'koi_insol',
-				'koi_model_snr',
-				'koi_steff',
-				'koi_slogg',
-				'koi_srad',
-				'koi_kepmag',
-				'ra',
-				'dec',
-			];
-
-			if (loadId === activeLoadIdRef.current) {
-				classroomStore.setTargetColumn(targetCol);
-				classroomStore.setSelectedFeatures(features);
-			}
+			const metaAfter = classroomStore.getState().dataInput.columnMeta || [];
+			if (loadId === activeLoadIdRef.current) inferTargetAndFeatures(metaAfter);
 		} catch (error) {
 			console.error('Kepler dataset loading error:', error);
 			setParseError(
@@ -205,33 +209,8 @@ export default function ClassroomDataInputTab() {
 			const csvContent = await response.text();
 			if (loadId !== activeLoadIdRef.current) return;
 			await parseCSV(csvContent, 'K2-Classroom-Data.csv');
-
-			// Infer sensible target (reuse koi_disposition fallback logic style)
-			const metaAfter = classroomStore.getState().dataInput.columnMeta;
-			let targetCol = 'k2_disposition';
-			if (!metaAfter?.some((m) => m.name === targetCol)) {
-				const candidate = metaAfter?.find(
-					(m) =>
-						m.inferredType === 'categorical' || m.inferredType === 'boolean',
-				);
-				if (candidate) targetCol = candidate.name;
-			}
-
-			// Select numeric/categorical features excluding target
-			const features =
-				metaAfter
-					?.filter(
-						(m) =>
-							m.name !== targetCol &&
-							(m.inferredType === 'numeric' ||
-								m.inferredType === 'categorical'),
-					)
-					.map((m) => m.name) || [];
-
-			if (loadId === activeLoadIdRef.current) {
-				classroomStore.setTargetColumn(targetCol);
-				classroomStore.setSelectedFeatures(features);
-			}
+			const metaAfter = classroomStore.getState().dataInput.columnMeta || [];
+			if (loadId === activeLoadIdRef.current) inferTargetAndFeatures(metaAfter);
 		} catch (error) {
 			console.error('K2 dataset loading error:', error);
 			setParseError('Failed to load K2 dataset.');
@@ -251,28 +230,8 @@ export default function ClassroomDataInputTab() {
 			const csvContent = await response.text();
 			if (loadId !== activeLoadIdRef.current) return;
 			await parseCSV(csvContent, 'TESS-Classroom-Data.csv');
-			const metaAfter = classroomStore.getState().dataInput.columnMeta;
-			let targetCol = 'tess_disposition';
-			if (!metaAfter?.some((m) => m.name === targetCol)) {
-				const candidate = metaAfter?.find(
-					(m) =>
-						m.inferredType === 'categorical' || m.inferredType === 'boolean',
-				);
-				if (candidate) targetCol = candidate.name;
-			}
-			const features =
-				metaAfter
-					?.filter(
-						(m) =>
-							m.name !== targetCol &&
-							(m.inferredType === 'numeric' ||
-								m.inferredType === 'categorical'),
-					)
-					.map((m) => m.name) || [];
-			if (loadId === activeLoadIdRef.current) {
-				classroomStore.setTargetColumn(targetCol);
-				classroomStore.setSelectedFeatures(features);
-			}
+			const metaAfter = classroomStore.getState().dataInput.columnMeta || [];
+			if (loadId === activeLoadIdRef.current) inferTargetAndFeatures(metaAfter);
 		} catch (error) {
 			console.error('TESS dataset loading error:', error);
 			setParseError('Failed to load TESS dataset.');
@@ -299,24 +258,9 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 			// If a newer selection already happened, bail early before heavy work
 			if (loadId !== activeLoadIdRef.current) return;
 			await parseCSV(sampleCSV, `${source}-sample.csv`);
-
-			// Auto-select target and features for sample data
-			const targetCol = 'disposition';
-			const currentMeta = classroomStore.getState().dataInput.columnMeta;
-			const features =
-				currentMeta
-					?.filter(
-						(col) =>
-							col.name !== targetCol &&
-							(col.inferredType === 'numeric' ||
-								col.inferredType === 'categorical'),
-					)
-					.map((col) => col.name) || [];
-
-			if (loadId === activeLoadIdRef.current) {
-				classroomStore.setTargetColumn(targetCol);
-				classroomStore.setSelectedFeatures(features);
-			}
+			const currentMeta = classroomStore.getState().dataInput.columnMeta || [];
+			if (loadId === activeLoadIdRef.current)
+				inferTargetAndFeatures(currentMeta);
 		} catch (error) {
 			console.error('Sample dataset loading error:', error);
 		}
@@ -501,14 +445,13 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 		fileInputRef.current?.click();
 	};
 
-	// IMPLEMENTATION UPDATE: Handle file upload with enhanced CSV parsing
+	// Enhanced upload: infer target column & validate dataset suitability
 	const handleFileUpload = async (
 		event: React.ChangeEvent<HTMLInputElement>,
 	) => {
 		const file = event.target.files?.[0];
 		if (!file) return;
 
-		// Validate file type
 		if (!file.name.toLowerCase().endsWith('.csv')) {
 			setParseError('Please upload a CSV file');
 			return;
@@ -520,24 +463,16 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 		setParseError(null);
 
 		try {
-			// Read file content
 			const csvContent = await file.text();
-
-			// Use enhanced CSV parser
-			await parseCSV(csvContent, file.name);
-
-			// Auto-select features (numeric and categorical columns)
-			const currentMeta = classroomStore.getState().dataInput.columnMeta;
-			const features =
-				currentMeta
-					?.filter(
-						(col) =>
-							col.inferredType === 'numeric' ||
-							col.inferredType === 'categorical',
-					)
-					.map((col) => col.name) || [];
-
-			classroomStore.setSelectedFeatures(features);
+			await parseCSV(csvContent, file.name, {
+				maxRows: 5000,
+				tolerant: true,
+				maxInconsistencyRatio: 0.3,
+				autoDetectDelimiter: true,
+				delimiters: [',', '\t', ';', '|'],
+			});
+			const currentMeta = classroomStore.getState().dataInput.columnMeta || [];
+			inferTargetAndFeatures(currentMeta);
 			classroomStore.setDataSource('own');
 		} catch (error) {
 			console.error('CSV parsing error:', error);
@@ -963,6 +898,38 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 												About the TESS Dataset
 											</h5>
 											<p className="text-xs text-pink-700">
+												{/* Parse diagnostics banner */}
+												{classroomState.dataInput.parseStats && (
+													<div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-xs flex flex-wrap gap-4">
+														<div>
+															<span className="font-medium">Delimiter:</span>{' '}
+															{classroomState.dataInput.parseStats.delimiter}
+														</div>
+														<div>
+															<span className="font-medium">Rows:</span>{' '}
+															{
+																classroomState.dataInput.parseStats
+																	.totalRowsAfter
+															}{' '}
+															/{' '}
+															{
+																classroomState.dataInput.parseStats
+																	.totalRowsBefore
+															}
+														</div>
+														{classroomState.dataInput.parseStats
+															.inconsistentRowsDropped > 0 && (
+															<div className="text-orange-600">
+																Dropped{' '}
+																{
+																	classroomState.dataInput.parseStats
+																		.inconsistentRowsDropped
+																}{' '}
+																inconsistent rows
+															</div>
+														)}
+													</div>
+												)}
 												This dataset includes candidates from the Transiting
 												Exoplanet Survey Satellite (TESS) mission, covering
 												nearly the entire sky to identify planets around bright

@@ -15,6 +15,14 @@ export interface RawDataset {
 	header: string[];
 }
 
+// Parsing diagnostics for transparency in tolerant ingestion
+export interface ParseStats {
+	delimiter: string;
+	inconsistentRowsDropped: number;
+	totalRowsBefore: number;
+	totalRowsAfter: number;
+}
+
 export interface InferredColumnMeta {
 	name: string;
 	index: number;
@@ -87,6 +95,7 @@ export interface DataInputState {
 	columnMeta?: InferredColumnMeta[];
 	targetColumn?: string;
 	selectedFeatures?: string[];
+	parseStats?: ParseStats; // diagnostics from last parse
 	missingValueStrategy: Record<string, 'drop' | 'mean' | 'mode'>;
 	normalization: boolean;
 }

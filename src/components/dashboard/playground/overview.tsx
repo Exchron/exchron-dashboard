@@ -1,9 +1,19 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardTitle, CardContent } from '../../ui/Card';
 import Link from 'next/link';
 import { ActionButton } from '../../ui/ActionButton';
+import Image from 'next/image';
+import CNN_confusionmatrix from '../../../../assets/CNN/conf_matrix.jpg';
+import Historyc from '../../../../assets/CNN/his.jpg';
+import LightcurveImg from '../../../../assets/CNN/lightcurve.jpg';
+import roc from '../../../../assets/CNN/roc.jpg';
+// DNN
+import D_conf_data from '../../../../assets/DNN/conf_data.jpg';
+import correlationMatrix from '../../../../assets/DNN/correlation_matrix.jpg';
+import featureAnalysisImg from '../../../../assets/DNN/feature_analysis.jpg';
+import m_data from '../../../../assets/DNN/m_data.jpg';
 
 // Types
 type ModelMetric = {
@@ -17,7 +27,6 @@ type ModelParameters = Record<string, string | number>;
 
 interface PlaygroundModel {
 	id: string;
-	name: string;
 	short: string; // short label for toggle chip
 	description: string[]; // paragraphs
 	architecturePlaceholders: { label: string }[]; // placeholder tiles (diagrams, curves, etc.)
@@ -30,24 +39,23 @@ interface PlaygroundModel {
 // Static demo data (replace with API fetch later). Kept outside component for SSR friendliness.
 const MODELS: PlaygroundModel[] = [
 	{
-		id: 'cnn',
-		name: 'CNN',
-		short: 'CNN',
+		id: 'exchron-cnn',
+		short: 'EXCHRON-CNN',
 		description: [
-			'A standard Convolutional Neural Network (CNN) for time series classification. Suitable for baseline performance on light curve data.',
-			'Uses stacked 1D convolutional layers with ReLU activations and max pooling. Trained with cross-entropy loss and Adam optimizer.',
+			'EXCHRON_CNN is a convolutional neural network specifically designed for the classification of exoplanet light curves, where identifying weak transit signals among stellar variability and noise is a major challenge. The model is built around stacked 1D convolutional layers that capture short-term flux variations and periodic dips characteristic of planetary transits. To strengthen the learning process, it uses residual-style feature preservation, ensuring that low-level temporal information is not lost as deeper layers refine higher-level representations. This layered approach allows the model to efficiently recognize both subtle and pronounced transit patterns, making it robust across diverse light curve profiles.',
+			'To maintain stability and prevent overfitting, EXCHRON_CNN integrates regularization techniques such as dropout and weight constraints, alongside batch-based optimization with Adam. Hyperparameters have been carefully tuned to balance training efficiency and predictive accuracy, including a moderate learning rate, dropout probability, and controlled network depth. Together, these design choices allow the model to achieve strong generalization across unseen data while remaining computationally efficient. The result is a CNN architecture that not only performs well in controlled experiments but also scales effectively for large-scale exoplanet surveys, where thousands of light curves must be analyzed quickly and reliably.',
 		],
 		architecturePlaceholders: [
-			{ label: 'CNN Architecture' },
+			{ label: 'EXCHRON_CNN Architecture' },
 			{ label: 'Training Curve' },
 		],
 		metrics: [
-			{ label: 'Accuracy', value: 0.91 },
-			{ label: 'Recall', value: 0.88 },
-			{ label: 'Precision', value: 0.89 },
-			{ label: 'F1 Score', value: 0.885 },
-			{ label: 'AUC', value: 0.92 },
-			{ label: 'Latency (ms)', value: 10.2, higherIsBetter: false },
+			{ label: 'Accuracy', value: 0.801 },
+			{ label: 'Recall', value: 0.711 },
+			{ label: 'Precision', value: 0.801 },
+			{ label: 'F1 Score', value: 0.801 },
+			{ label: 'AUC', value: 0.947 },
+			{ label: 'Latency (ms)', value: 10.8, higherIsBetter: false },
 		],
 		parameters: {
 			'Learning Rate': '1e-3',
@@ -55,52 +63,51 @@ const MODELS: PlaygroundModel[] = [
 			Epochs: 30,
 			Batch: 128,
 			Dropout: '0.15',
-			Layers: 10,
+			Layers: 12,
 		},
-		comparisonBaseline: 'CNN-SMOTE',
+		comparisonBaseline: 'EXCHRON_DNN',
 		comparisonMetrics: [
-			{ label: 'Accuracy', model: 0.91, baseline: 0.93 },
-			{ label: 'Recall', model: 0.88, baseline: 0.92 },
-			{ label: 'Precision', model: 0.89, baseline: 0.91 },
-			{ label: 'F1', model: 0.885, baseline: 0.915 },
-			{ label: 'AUC', model: 0.92, baseline: 0.94 },
+			{ label: 'Accuracy', model: 0.935, baseline: 0.928 },
+			{ label: 'Recall', model: 0.918, baseline: 0.905 },
+			{ label: 'Precision', model: 0.922, baseline: 0.926 },
+			{ label: 'F1', model: 0.92, baseline: 0.915 },
+			{ label: 'AUC', model: 0.947, baseline: 0.939 },
 		],
 	},
 	{
-		id: 'cnn-smote',
-		name: 'CNN-SMOTE',
-		short: 'CNN-SMOTE',
+		id: 'exchron-dnn',
+		short: 'EXCHRON-DNN',
 		description: [
-			'A CNN model trained with SMOTE (Synthetic Minority Over-sampling Technique) to address class imbalance in exoplanet transit detection.',
-			'SMOTE generates synthetic samples for the minority class, improving recall and overall robustness.',
+			'EXCHRON_DNN is a dual-input deep neural network designed for robust exoplanet classification by combining both raw time-series signals and engineered astronomical features. The architecture is built with two specialized branches: a time-series branch, powered by 1D convolutional and pooling layers to detect subtle transit-like dips across thousands of flux measurements, and a feature branch, which processes extracted statistical, frequency, variability, and astrophysical parameters derived from the KOI catalog. By integrating these complementary perspectives, the network captures both fine-grained temporal patterns and higher-level contextual information that are crucial for accurate candidate validation.',
+			'The two branches are merged into a unified representation, followed by dense layers with dropout and batch normalization to improve generalization and stability during training. This design enables EXCHRON_DNN to achieve a balance between raw signal recognition and interpretability, offering insights into feature importance through methods like SHAP. With its flexible architecture and strong generalization, the model provides reliable classification performance across diverse stellar systems, making it a powerful tool for large-scale exoplanet discovery pipelines.',
 		],
 		architecturePlaceholders: [
-			{ label: 'CNN-SMOTE Architecture' },
-			{ label: 'SMOTE Visualization' },
+			{ label: 'EXCHRON_DNN Architecture' },
+			{ label: 'Training Curve' },
 		],
 		metrics: [
-			{ label: 'Accuracy', value: 0.93 },
-			{ label: 'Recall', value: 0.92 },
-			{ label: 'Precision', value: 0.91 },
+			{ label: 'Accuracy', value: 0.928 },
+			{ label: 'Recall', value: 0.905 },
+			{ label: 'Precision', value: 0.926 },
 			{ label: 'F1 Score', value: 0.915 },
-			{ label: 'AUC', value: 0.94 },
-			{ label: 'Latency (ms)', value: 11.5, higherIsBetter: false },
+			{ label: 'AUC', value: 0.939 },
+			{ label: 'Latency (ms)', value: 8.6, higherIsBetter: false },
 		],
 		parameters: {
-			'Learning Rate': '1e-3',
+			'Learning Rate': '8e-4',
 			Optimizer: 'Adam',
-			Epochs: 30,
-			Batch: 128,
-			Dropout: '0.15',
-			Layers: 10,
+			Epochs: 35,
+			Batch: 256,
+			Dropout: '0.20',
+			Layers: 8,
 		},
-		comparisonBaseline: 'CNN',
+		comparisonBaseline: 'EXCHRON_CNN',
 		comparisonMetrics: [
-			{ label: 'Accuracy', model: 0.93, baseline: 0.91 },
-			{ label: 'Recall', model: 0.92, baseline: 0.88 },
-			{ label: 'Precision', model: 0.91, baseline: 0.89 },
-			{ label: 'F1', model: 0.915, baseline: 0.885 },
-			{ label: 'AUC', model: 0.94, baseline: 0.92 },
+			{ label: 'Accuracy', model: 0.928, baseline: 0.935 },
+			{ label: 'Recall', model: 0.905, baseline: 0.918 },
+			{ label: 'Precision', model: 0.926, baseline: 0.922 },
+			{ label: 'F1', model: 0.915, baseline: 0.92 },
+			{ label: 'AUC', model: 0.939, baseline: 0.947 },
 		],
 	},
 ];
@@ -109,78 +116,34 @@ const numberFormat = (v: number) => (v < 1 ? v.toFixed(4) : v.toFixed(2));
 
 export default function OverviewTab() {
 	const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+	const [lightbox, setLightbox] = useState<{ src: any; alt: string } | null>(null);
+
+	const openLightbox = (src: any, alt: string) => setLightbox({ src, alt });
+	const closeLightbox = () => setLightbox(null);
+
+	useEffect(() => {
+		if (!lightbox) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') closeLightbox();
+		};
+		window.addEventListener('keydown', onKey);
+		const prev = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			window.removeEventListener('keydown', onKey);
+			document.body.style.overflow = prev;
+		};
+	}, [lightbox]);
 	const model = useMemo(
 		() =>
 			selectedModelId ? MODELS.find((m) => m.id === selectedModelId) : null,
 		[selectedModelId],
 	);
-
-	// Save selected model to localStorage with deselection support
-	const handleModelSelect = (modelId: string) => {
-		if (selectedModelId === modelId) {
-			// Deselect if clicking the same model
-			setSelectedModelId(null);
-			localStorage.removeItem('selectedModel');
-			// Trigger storage event for real-time updates
-			window.dispatchEvent(
-				new StorageEvent('storage', {
-					key: 'selectedModel',
-					newValue: null,
-					oldValue: localStorage.getItem('selectedModel'),
-					storageArea: localStorage,
-				}),
-			);
-		} else {
-			// Select new model
-			setSelectedModelId(modelId);
-			const selectedModel = MODELS.find((m) => m.id === modelId);
-			if (selectedModel) {
-				const modelData = JSON.stringify({
-					id: selectedModel.id,
-					name: selectedModel.name,
-					short: selectedModel.short,
-				});
-				localStorage.setItem('selectedModel', modelData);
-				// Trigger storage event for real-time updates
-				window.dispatchEvent(
-					new StorageEvent('storage', {
-						key: 'selectedModel',
-						newValue: modelData,
-						oldValue: null,
-						storageArea: localStorage,
-					}),
-				);
-			}
-		}
-	};
-
-	// Clear localStorage and load selected model from localStorage on mount
-	React.useEffect(() => {
-		// Clear any existing selections on app start
-		const isInitialLoad = !sessionStorage.getItem('appInitialized');
-		if (isInitialLoad) {
-			localStorage.removeItem('selectedModel');
-			sessionStorage.setItem('appInitialized', 'true');
-			return;
-		}
-
-		const savedModel = localStorage.getItem('selectedModel');
-		if (savedModel) {
-			try {
-				const parsed = JSON.parse(savedModel);
-				const foundModel = MODELS.find((m) => m.id === parsed.id);
-				if (foundModel) {
-					setSelectedModelId(foundModel.id);
-				}
-			} catch (e) {
-				// Ignore parsing errors
-			}
-		}
-	}, []);
+	const handleModelSelect = (id: string) =>
+		setSelectedModelId((prev) => (prev === id ? null : id));
 
 	return (
 		<div className="w-full">
-			{/* Model Selection */}
 			<Card className="mb-3">
 				<div className="flex flex-col gap-3">
 					<div className="flex items-center justify-between gap-4 flex-wrap">
@@ -202,15 +165,6 @@ export default function OverviewTab() {
 										aria-pressed={active}
 									>
 										{m.short}
-										<span
-											className={`ml-1 text-[11px] ${
-												active
-													? 'text-gray-300'
-													: 'text-[var(--text-secondary)]'
-											}`}
-										>
-											{m.name}
-										</span>
 									</button>
 								);
 							})}
@@ -219,18 +173,11 @@ export default function OverviewTab() {
 				</div>
 			</Card>
 
-			{/* Main grid layout */}
 			{model ? (
 				<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-					{/* Left Column - Architecture */}
 					<div className="lg:col-span-6">
 						<Card className="h-full flex flex-col">
-							<CardTitle>
-								Model Architecture ·{' '}
-								<span className="text-sm font-normal text-[var(--text-secondary)]">
-									{model.name}
-								</span>
-							</CardTitle>
+							<CardTitle>Model Architecture · </CardTitle>
 							<CardContent className="flex-1 flex flex-col">
 								{model.description.map((p, idx) => (
 									<p
@@ -242,25 +189,39 @@ export default function OverviewTab() {
 										{p}
 									</p>
 								))}
-								<div className="mt-auto grid grid-cols-2 gap-4">
-									{model.architecturePlaceholders.map((ph) => (
-										<div
-											key={ph.label}
-											className="bg-[var(--placeholder-color)] aspect-square flex items-center justify-center rounded-lg border border-[var(--input-border)] text-center px-2"
-										>
-											<span className="text-sm text-[var(--text-secondary)] leading-tight">
-												{ph.label}
-											</span>
-										</div>
-									))}
+								{/* Architecture Visual Only (intrinsic ratio) */}
+								<div className="mt-auto">
+									{model.id === 'exchron-cnn' && (
+										<figure className="mx-auto max-w-[760px] mb-6 text-center cursor-zoom-in" onClick={() => openLightbox(LightcurveImg, 'EXCHRON_CNN architecture')} title="Click to enlarge">
+											<Image
+												src={LightcurveImg}
+												alt="EXCHRON_CNN architecture"
+												className="w-full h-auto rounded-lg border border-[var(--input-border)]"
+												placeholder="blur"
+											/>
+											<figcaption className="mt-2 text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
+												Architecture
+											</figcaption>
+										</figure>
+									)}
+									{model.id === 'exchron-dnn' && (
+										<figure className="mx-auto max-w-[760px] mb-6 text-center cursor-zoom-in" onClick={() => openLightbox(featureAnalysisImg, 'EXCHRON_DNN architecture')} title="Click to enlarge">
+											<Image
+												src={featureAnalysisImg}
+												alt="EXCHRON_DNN architecture"
+												className="w-full h-auto rounded-lg border border-[var(--input-border)]"
+												placeholder="blur"
+											/>
+											<figcaption className="mt-2 text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
+												Feature Branch
+											</figcaption>
+										</figure>
+									)}
 								</div>
 							</CardContent>
 						</Card>
 					</div>
-
-					{/* Right Column - Metrics & Comparison */}
 					<div className="lg:col-span-6 flex flex-col gap-4">
-						{/* Performance Metrics & Hyperparameters */}
 						<Card>
 							<CardTitle>Performance Metrics & Best Parameters</CardTitle>
 							<CardContent>
@@ -298,15 +259,63 @@ export default function OverviewTab() {
 										</ul>
 									</div>
 									<div className="md:col-span-6">
-										<div className="bg-[var(--placeholder-color)] h-full min-h-[180px] rounded-md border border-[var(--input-border)] flex items-center justify-center text-sm text-[var(--text-secondary)]">
-											Training / Validation Curves
-										</div>
+										{model.id === 'exchron-cnn' && (
+											<figure
+												style={{
+													aspectRatio: `${Historyc.width} / ${Historyc.height}`,
+												}}
+												className="w-full cursor-zoom-in"
+												onClick={() => openLightbox(Historyc, 'EXCHRON_CNN training / validation curves')}
+												title="Click to enlarge"
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={Historyc}
+														alt="EXCHRON_CNN training / validation curves"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 800px) 100vw, 480px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-2 py-0.5 rounded">
+														Training Curve
+													</span>
+												</div>
+											</figure>
+										)}
+										{model.id === 'exchron-dnn' && (
+											<figure
+												style={{
+													aspectRatio: `${m_data.width} / ${m_data.height}`,
+												}}
+												className="w-full cursor-zoom-in"
+												onClick={() => openLightbox(m_data, 'EXCHRON_DNN training / validation curves')}
+												title="Click to enlarge"
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={m_data}
+														alt="EXCHRON_DNN training / validation curves"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 800px) 100vw, 480px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-2 py-0.5 rounded">
+														Training Curve
+													</span>
+												</div>
+											</figure>
+										)}
+										{!['exchron-cnn', 'exchron-dnn'].includes(model.id) && (
+											<div className="rounded-md border border-[var(--input-border)] bg-[var(--placeholder-color)] h-[200px] flex items-center justify-center text-sm text-[var(--text-secondary)]">
+												Training / Validation Curves
+											</div>
+										)}
 									</div>
 								</div>
 							</CardContent>
 						</Card>
-
-						{/* Metrics Comparison */}
 						<Card className="relative">
 							<CardTitle>Metrics Comparison</CardTitle>
 							<CardContent>
@@ -319,11 +328,113 @@ export default function OverviewTab() {
 									</span>{' '}
 									across core evaluation metrics.
 								</p>
-
-								<div className="mt-8 bg-[var(--placeholder-color)] min-h-[160px] rounded-md border border-[var(--input-border)] flex items-center justify-center text-sm text-[var(--text-secondary)]">
-									Additional Graph (Scatter / ROC / PR Curve Placeholder)
+								<div className="mt-6 grid grid-cols-2 gap-4">
+									{model.id === 'exchron-cnn' && (
+										<>
+											<figure
+												style={{ aspectRatio: `${roc.width} / ${roc.height}` }}
+												className="w-full cursor-zoom-in"
+												onClick={() => openLightbox(roc, 'EXCHRON_CNN ROC Curve')}
+												title="Click to enlarge"
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={roc}
+														alt="EXCHRON_CNN ROC Curve"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 900px) 100vw, 420px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded">
+														ROC Curve
+													</span>
+												</div>
+											</figure>
+											<figure
+												style={{
+													aspectRatio: `${CNN_confusionmatrix.width} / ${CNN_confusionmatrix.height}`,
+												}}
+												className="w-full cursor-zoom-in"
+												onClick={() => openLightbox(CNN_confusionmatrix, 'EXCHRON_CNN Confusion Matrix')}
+												title="Click to enlarge"
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={CNN_confusionmatrix}
+														alt="EXCHRON_CNN Confusion Matrix"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 900px) 100vw, 420px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded">
+														Confusion Matrix
+													</span>
+												</div>
+											</figure>
+										</>
+									)}
+									{model.id === 'exchron-dnn' && (
+										<>
+											<figure
+												style={{
+													aspectRatio: `${correlationMatrix.width} / ${correlationMatrix.height}`,
+												}}
+												className="w-full cursor-zoom-in"
+												onClick={() => openLightbox(correlationMatrix, 'EXCHRON_DNN Correlation Matrix')}
+												title="Click to enlarge"
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={correlationMatrix}
+														alt="EXCHRON_DNN Correlation Matrix"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 900px) 100vw, 420px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded">
+														Correlation Matrix
+													</span>
+												</div>
+											</figure>
+											<figure
+												style={{
+													aspectRatio: `${D_conf_data.width} / ${D_conf_data.height}`,
+												}}
+												className="w-full cursor-zoom-in"
+												onClick={() => openLightbox(D_conf_data, 'EXCHRON_DNN Confusion Matrix')}
+												title="Click to enlarge"
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={D_conf_data}
+														alt="EXCHRON_DNN Confusion Matrix"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 900px) 100vw, 420px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded">
+														Confusion Matrix
+													</span>
+												</div>
+												{lightbox && (
+													<div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={lightbox.alt}>
+														<div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeLightbox} />
+														<div className="relative z-10 w-full h-full flex items-center justify-center p-4">
+															<div className="relative w-full max-w-6xl" style={{aspectRatio: `${lightbox.src.width} / ${lightbox.src.height}`}}>
+																<Image src={lightbox.src} alt={lightbox.alt} fill className="object-contain rounded-lg shadow-2xl" priority />
+																<button onClick={closeLightbox} aria-label="Close image" className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-white/70">✕</button>
+															</div>
+														</div>
+													</div>
+												)}
+											</figure>
+										</>
+									)}
 								</div>
-
 								<div className="fixed bottom-8 right-8 z-20">
 									<ActionButton
 										href={
