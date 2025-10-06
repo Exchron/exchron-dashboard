@@ -23,6 +23,10 @@ export default function ClassroomDataInputTab() {
 	const [isUploading, setIsUploading] = useState(false);
 	const [isParsing, setIsParsing] = useState(false);
 	const [parseError, setParseError] = useState<string | null>(null);
+	const [usedTargetFallback, setUsedTargetFallback] = useState<{
+		column?: string;
+		reason?: string;
+	} | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// IMPLEMENTATION UPDATE: Use classroom store for state management
@@ -76,6 +80,7 @@ export default function ClassroomDataInputTab() {
 		const categoricalCandidates = meta.filter(
 			(m) => m.inferredType === 'categorical' || m.inferredType === 'boolean',
 		);
+		let usedFallback = false;
 		for (const col of categoricalCandidates) {
 			const uniq = col.uniqueValues?.length || 0;
 			if (uniq >= 2 && uniq <= 30 && !/id$|uuid|identifier/i.test(col.name)) {
@@ -86,6 +91,28 @@ export default function ClassroomDataInputTab() {
 		// Fallback to first categorical/boolean if no good candidate
 		if (!target && categoricalCandidates.length > 0)
 			target = categoricalCandidates[0].name;
+		// NEW: Secondary fallback - low-cardinality numeric column (2-10 unique numeric values)
+		if (!target) {
+			const numericFallback = meta.find((m) => {
+				if (m.inferredType !== 'numeric') return false;
+				// Reconstruct unique numeric values quickly (limit scan)
+				const uniques = new Set<number>();
+				for (let r = 0; r < (rawDataset?.rows.length || 0); r++) {
+					const row = rawDataset!.rows[r];
+					const v = row[m.index];
+					if (v != null && v.trim() !== '') {
+						const num = parseFloat(v);
+						if (!isNaN(num)) uniques.add(num);
+						if (uniques.size > 10) break;
+					}
+				}
+				return uniques.size >= 2 && uniques.size <= 10;
+			});
+			if (numericFallback) {
+				target = numericFallback.name;
+				usedFallback = true;
+			}
+		}
 		if (!target) return; // can't proceed yet
 
 		// Feature candidates: numeric + categorical (excluding target). Avoid extremely high-cardinality categorical (> 100 unique)
@@ -103,6 +130,15 @@ export default function ClassroomDataInputTab() {
 		if (features.length === 0) return;
 		classroomStore.setTargetColumn(target);
 		classroomStore.setSelectedFeatures(features);
+		if (usedFallback) {
+			setUsedTargetFallback({
+				column: target,
+				reason:
+					'No categorical/boolean target detected. Chose low-cardinality numeric column as provisional target.',
+			});
+		} else {
+			setUsedTargetFallback(null);
+		}
 	};
 
 	const inferColumnType = (values: string[]): ColumnType => {
@@ -198,26 +234,7 @@ export default function ClassroomDataInputTab() {
 		}
 	};
 
-	// NEW: Load K2 dataset (version-aware)
-	const loadK2Dataset = async (loadId: number) => {
-		try {
-			setIsParsing(true);
-			const response = await fetch('/api/classroom/k2');
-			if (!response.ok) {
-				throw new Error('Failed to load K2 classroom dataset');
-			}
-			const csvContent = await response.text();
-			if (loadId !== activeLoadIdRef.current) return;
-			await parseCSV(csvContent, 'K2-Classroom-Data.csv');
-			const metaAfter = classroomStore.getState().dataInput.columnMeta || [];
-			if (loadId === activeLoadIdRef.current) inferTargetAndFeatures(metaAfter);
-		} catch (error) {
-			console.error('K2 dataset loading error:', error);
-			setParseError('Failed to load K2 dataset.');
-		} finally {
-			if (loadId === activeLoadIdRef.current) setIsParsing(false);
-		}
-	};
+	// (Removed) K2 dataset support has been deprecated.
 
 	// NEW: Load TESS dataset (version-aware)
 	const loadTessDataset = async (loadId: number) => {
@@ -266,56 +283,40 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 		}
 	};
 
-	// Load real Kepler data on component mount
+	// Load dataset when data source changes or when explicitly forced to reload
 	useEffect(() => {
-		const initialLoadId = ++activeLoadIdRef.current;
-		if (selectedDataSource === 'kepler' && !rawDataset) {
-			loadKeplerDataset(initialLoadId);
-		} else if (selectedDataSource === 'k2' && !rawDataset) {
-			loadK2Dataset(initialLoadId);
-		} else if (selectedDataSource === 'tess' && !rawDataset) {
-			loadTessDataset(initialLoadId);
-		} else if (
-			selectedDataSource !== 'own' &&
-			selectedDataSource !== 'kepler' &&
-			selectedDataSource !== 'k2' &&
-			selectedDataSource !== 'tess' &&
-			!rawDataset
-		) {
-			loadSampleDataset(selectedDataSource, initialLoadId);
-		}
+		// Legacy migration guard for 'k2' removed (type no longer includes 'k2')
+		// If user chose own data we only open popup; no auto-load
 		if (selectedDataSource === 'own') {
 			setShowUploadPopup(true);
+			return;
+		}
+		// Always load fresh dataset for kepler/tess/sample sources (do not reuse stale rawDataset from another source)
+		const loadId = ++activeLoadIdRef.current;
+		if (selectedDataSource === 'kepler') {
+			loadKeplerDataset(loadId);
+		} else if (selectedDataSource === 'tess') {
+			loadTessDataset(loadId);
+		} else {
+			loadSampleDataset(selectedDataSource, loadId);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [selectedDataSource]);
 
 	// IMPLEMENTATION UPDATE: Handle data source selection with store integration
 	const handleDataSourceChange = (source: string) => {
-		// Increment load version
-		const loadId = ++activeLoadIdRef.current;
-		classroomStore.setDataSource(source as any);
+		// Clear existing dataset/state before switching (prevents stale display)
+		classroomStore.setRawDataset(undefined as any, []);
+		classroomStore.setTargetColumn('');
+		classroomStore.setSelectedFeatures([]);
+		setShowDataPreview(false);
+		setIsParsing(false);
 		setParseError(null);
-		if (source === 'kepler') {
-			loadKeplerDataset(loadId);
-			setShowUploadPopup(false);
-		} else if (source === 'k2') {
-			loadK2Dataset(loadId);
-			setShowUploadPopup(false);
-		} else if (source === 'tess') {
-			loadTessDataset(loadId);
-			setShowUploadPopup(false);
-		} else if (source === 'own') {
-			// Reset for own data upload
-			classroomStore.setRawDataset(undefined as any, []);
-			classroomStore.setTargetColumn('');
-			classroomStore.setSelectedFeatures([]);
-			setShowDataPreview(false);
-			setIsParsing(false);
-			setShowUploadPopup(true); // auto open popup
-		} else {
-			loadSampleDataset(source, loadId);
-			setShowUploadPopup(false);
+		setShowUploadPopup(false);
+		classroomStore.setDataSource(source as any); // effect will load
+		if (source === 'own') {
+			// For own data we just open popup; parsing occurs on upload
+			setShowUploadPopup(true);
 		}
 	};
 
@@ -417,24 +418,11 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 		console.groupEnd();
 	};
 
-	// Handle download template
+	// Handle download template (static file in /public)
 	const handleDownloadTemplate = () => {
-		// Create CSV content for Kepler-style exoplanet data template
-		const csvContent =
-			'koi_disposition,koi_period,koi_impact,koi_duration,koi_depth,koi_prad,koi_teq,koi_insol,koi_steff,koi_slogg,koi_srad,koi_kepmag\n' +
-			'CONFIRMED,9.488,0.146,2.958,615.8,2.26,793.0,93.59,5455.0,4.467,0.927,15.347\n' +
-			'CANDIDATE,19.899,0.969,1.782,10829.0,14.6,638.0,39.3,5853.0,4.544,0.868,15.436\n' +
-			'FALSE POSITIVE,1.737,1.276,2.406,8079.2,33.46,1395.0,891.96,5805.0,4.564,0.791,15.597\n' +
-			'CONFIRMED,2.526,0.701,1.655,603.3,2.75,1406.0,926.16,6031.0,4.438,1.046,15.509\n' +
-			'CANDIDATE,11.094,0.538,4.595,1517.5,3.9,835.0,114.81,6046.0,4.486,0.972,15.714\n';
-
-		// Create a Blob and download link
-		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
-		link.setAttribute('href', url);
-		link.setAttribute('download', 'kepler-template.csv');
-		link.style.visibility = 'hidden';
+		link.href = '/data-upload-format.csv';
+		link.setAttribute('download', 'data-upload-format.csv');
 		document.body.appendChild(link);
 		link.click();
 		document.body.removeChild(link);
@@ -547,7 +535,7 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 								className="space-y-3"
 								aria-label="Dataset Source"
 								onKeyDown={(e) => {
-									const order = ['kepler', 'k2', 'tess', 'own'] as const;
+									const order = ['kepler', 'tess', 'own'] as const;
 									const idx = order.indexOf(selectedDataSource as any);
 									if (['ArrowDown', 'ArrowRight'].includes(e.key)) {
 										e.preventDefault();
@@ -563,14 +551,8 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 								{[
 									{
 										value: 'kepler',
-										label: 'Kepler Database (9,566 exoplanet candidates)',
+										label: 'Kepler Database',
 										desc: 'Real NASA data with 28 astronomical features',
-										accent: 'black',
-									},
-									{
-										value: 'k2',
-										label: 'K2 Database',
-										desc: 'Extended Kepler mission data',
 										accent: 'black',
 									},
 									{
@@ -720,7 +702,7 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 												Download template file
 											</p>
 											<p className="text-left text-neutral-500">
-												kepler-template.csv
+												data-upload-format.csv
 											</p>
 										</div>
 									</button>
@@ -729,10 +711,32 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											📋 Upload Requirements:
 										</h4>
 										<ul className="text-xs text-blue-700 space-y-1">
-											<li>• CSV format with header row</li>
-											<li>• At least 5 rows of data for training</li>
-											<li>• Include both features and target column</li>
-											<li>• Use numeric values where possible</li>
+											<li>
+												• CSV format with a single header row (no blank column
+												names)
+											</li>
+											<li>
+												• Minimum 10 data rows (more improves model quality)
+											</li>
+											<li>
+												• Include a target column that is categorical, boolean,
+												or low-cardinality numeric (2–10 unique values)
+											</li>
+											<li>
+												• Features should be numeric or categorical; avoid
+												free-form text
+											</li>
+											<li>
+												• Consistent column count on every row (no ragged rows)
+											</li>
+											<li>
+												• Label encode classes with integers if not using
+												strings (e.g. 0/1/2)
+											</li>
+											<li>
+												• Remove columns with {'>'}50% missing data for best
+												results
+											</li>
 										</ul>
 									</div>
 								</div>
@@ -878,64 +882,47 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 											</p>
 										</div>
 									)}
-									{selectedDataSource === 'k2' && (
-										<div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
-											<h5 className="text-sm font-medium text-indigo-800 mb-2">
-												About the K2 Dataset
-											</h5>
-											<p className="text-xs text-indigo-700">
-												This dataset contains observations from the extended K2
-												mission, providing additional exoplanet candidates and
-												stellar measurements across different fields of view.
-												Feature availability may differ from the original Kepler
-												dataset; automatic inference has been applied.
-											</p>
-										</div>
-									)}
 									{selectedDataSource === 'tess' && (
 										<div className="bg-pink-50 border border-pink-200 rounded-lg p-4 mb-4">
 											<h5 className="text-sm font-medium text-pink-800 mb-2">
 												About the TESS Dataset
 											</h5>
-											<p className="text-xs text-pink-700">
-												{/* Parse diagnostics banner */}
-												{classroomState.dataInput.parseStats && (
-													<div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-xs flex flex-wrap gap-4">
-														<div>
-															<span className="font-medium">Delimiter:</span>{' '}
-															{classroomState.dataInput.parseStats.delimiter}
-														</div>
-														<div>
-															<span className="font-medium">Rows:</span>{' '}
-															{
-																classroomState.dataInput.parseStats
-																	.totalRowsAfter
-															}{' '}
-															/{' '}
-															{
-																classroomState.dataInput.parseStats
-																	.totalRowsBefore
-															}
-														</div>
-														{classroomState.dataInput.parseStats
-															.inconsistentRowsDropped > 0 && (
-															<div className="text-orange-600">
-																Dropped{' '}
-																{
-																	classroomState.dataInput.parseStats
-																		.inconsistentRowsDropped
-																}{' '}
-																inconsistent rows
-															</div>
-														)}
+											{/* Parse diagnostics banner (separate block to avoid nesting divs inside <p>) */}
+											{classroomState.dataInput.parseStats && (
+												<div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 text-xs flex flex-wrap gap-4">
+													<div>
+														<span className="font-medium">Delimiter:</span>{' '}
+														{classroomState.dataInput.parseStats.delimiter}
 													</div>
-												)}
+													<div>
+														<span className="font-medium">Rows:</span>{' '}
+														{classroomState.dataInput.parseStats.totalRowsAfter}{' '}
+														/{' '}
+														{
+															classroomState.dataInput.parseStats
+																.totalRowsBefore
+														}
+													</div>
+													{classroomState.dataInput.parseStats
+														.inconsistentRowsDropped > 0 && (
+														<div className="text-orange-600">
+															Dropped{' '}
+															{
+																classroomState.dataInput.parseStats
+																	.inconsistentRowsDropped
+															}{' '}
+															inconsistent rows
+														</div>
+													)}
+												</div>
+											)}
+											<p className="text-xs text-pink-700">
 												This dataset includes candidates from the Transiting
 												Exoplanet Survey Satellite (TESS) mission, covering
 												nearly the entire sky to identify planets around bright
-												nearby stars. Feature composition differs from
-												Kepler/K2; the system has inferred datatypes and
-												suggested features automatically.
+												nearby stars. Feature composition differs from Kepler;
+												the system has inferred data types and suggested
+												features automatically.
 											</p>
 										</div>
 									)}
@@ -975,6 +962,38 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 													</option>
 												))}
 										</select>
+										{!targetColumn &&
+											columnMeta &&
+											columnMeta.filter(
+												(c) =>
+													c.inferredType === 'categorical' ||
+													c.inferredType === 'boolean',
+											).length === 0 && (
+												<div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded text-xs text-amber-800">
+													<strong className="block mb-1">
+														No target candidates automatically detected.
+													</strong>
+													We didn’t find a categorical / boolean column or
+													low-cardinality numeric surrogate. You can still
+													proceed by:
+													<ol className="list-decimal ml-4 mt-2 space-y-1">
+														<li>
+															Verifying your dataset has a label column (e.g.
+															status, class, disposition).
+														</li>
+														<li>
+															Converting pure numeric labels (0/1/2) into
+															integers without decimals.
+														</li>
+														<li>
+															Ensuring there are at least 2 distinct values
+															present.
+														</li>
+													</ol>
+													If you add or rename a target column, re-upload to
+													re-run inference.
+												</div>
+											)}
 										{targetColumn && (
 											<div className="mt-3 p-3 bg-white rounded border border-[#E6E7E9]">
 												<h5 className="text-sm font-medium mb-2 text-black">
@@ -1017,6 +1036,25 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 												</span>
 											)}
 									</p>
+									{/* High-missing columns warning */}
+									{columnMeta &&
+										(() => {
+											const highMissing = columnMeta.filter(
+												(c) =>
+													rawDataset.rows.length > 0 &&
+													c.missingCount / rawDataset.rows.length > 0.5,
+											);
+											if (!highMissing.length) return null;
+											return (
+												<div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded text-xs text-amber-800">
+													<strong>
+														Columns with more than 50% missing values:
+													</strong>{' '}
+													{highMissing.map((c) => c.name).join(', ')}. Consider
+													removing or imputing these to improve model quality.
+												</div>
+											);
+										})()}
 									{/* Column type summary */}
 									<div className="mb-4">
 										<h4 className="text-sm font-medium mb-2">Column Types:</h4>

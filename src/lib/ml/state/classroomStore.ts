@@ -21,12 +21,27 @@ class ClassroomStore {
 	private state: ClassroomState;
 	private listeners: Set<StateListener> = new Set();
 	private readonly STORAGE_KEY = 'exchron.classroom.state';
+	private hydratedFromStorage = false; // prevent multiple hydration attempts
 
 	constructor() {
 		this.state = this.getInitialState();
-		// Only attempt to load from localStorage in a browser environment
-		if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-			this.loadFromStorage();
+		// NOTE: We intentionally DO NOT hydrate from localStorage here.
+		// Doing so would cause the first client render to differ from the
+		// server-rendered HTML, leading to a React hydration warning when
+		// persisted state (e.g., different selectedDataSource) changes the UI.
+		// Hydration is now deferred until after mount via initFromStorage().
+	}
+
+	// Public method to hydrate from storage after the component has mounted
+	initFromStorage() {
+		if (this.hydratedFromStorage) return;
+		if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+			return;
+		const didLoad = this.loadFromStorage();
+		this.hydratedFromStorage = true;
+		if (didLoad) {
+			// Notify subscribers so UI updates AFTER initial client render
+			this.notify();
 		}
 	}
 
@@ -42,11 +57,19 @@ class ClassroomStore {
 			},
 			training: {
 				isTraining: false,
+				hasTrainedModel: false,
 			},
 			testExport: {
 				threshold: 0.5,
 				manualInputValues: {},
 				exportFormat: 'json-custom',
+				hasTestResults: false,
+				testMetrics: undefined,
+				confusionMatrix: undefined,
+				rawProbabilities: undefined,
+				rawTrueIndices: undefined,
+				rocCurve: undefined,
+				prCurve: undefined,
 			},
 		};
 	}
@@ -70,13 +93,25 @@ class ClassroomStore {
 
 	// Data Input actions
 	setDataSource(source: DataInputState['selectedDataSource']) {
+		const prev = this.state.dataInput.selectedDataSource;
 		this.state = {
 			...this.state,
 			dataInput: {
 				...this.state.dataInput,
 				selectedDataSource: source,
+				// Reset dependent selections when dataset changes
+				targetColumn: undefined,
+				selectedFeatures: undefined,
+				rawDataset: undefined,
+				columnMeta: undefined,
+				parseStats: undefined,
 			},
 		};
+		// If dataset actually changed, clear training & test results
+		if (source !== prev) {
+			this.clearTraining();
+			this.clearTestResults();
+		}
 		this.notify();
 	}
 
@@ -196,14 +231,51 @@ class ClassroomStore {
 		this.notify();
 	}
 
+	setHasTrainedModel(flag: boolean) {
+		this.state.training.hasTrainedModel = flag;
+		this.notify();
+	}
+
 	updateTrainingMetrics(epoch: number, metrics: any) {
 		if (this.state.training.currentRun) {
 			this.state.training.currentRun.epochMetrics.push({
 				epoch,
 				...metrics,
 			});
-			this.notify();
 		}
+		// Store raw numbers for calculations and formatted strings for display
+		if (!this.state.training.trainingProgress) {
+			this.state.training.trainingProgress = [];
+		}
+		const existingIndex = this.state.training.trainingProgress.findIndex(
+			(m) => m.epoch === epoch,
+		);
+		const entry = {
+			epoch,
+			loss: metrics.loss || 0,
+			accuracy: metrics.acc || metrics.accuracy || 0,
+			valLoss: metrics.valLoss,
+			valAccuracy: metrics.valAcc || metrics.valAccuracy,
+		};
+		if (existingIndex >= 0) {
+			this.state.training.trainingProgress[existingIndex] = entry;
+		} else {
+			this.state.training.trainingProgress.push(entry);
+		}
+		// Update last progress timestamp for stall detection
+		this.state.training.lastProgressAt = Date.now();
+		this.notify();
+	}
+
+	setModelMetrics(metrics: any) {
+		this.state.training.modelMetrics = metrics;
+		this.notify();
+	}
+
+	clearTrainingProgress() {
+		this.state.training.trainingProgress = [];
+		this.state.training.modelMetrics = null;
+		this.notify();
 	}
 
 	// Test & Export actions
@@ -224,6 +296,44 @@ class ClassroomStore {
 
 	setExportFormat(format: 'json-custom' | 'json-tfjs') {
 		this.state.testExport.exportFormat = format;
+		this.notify();
+	}
+
+	setTestResults(
+		metrics: any,
+		confusionMatrix?: number[][],
+		artifacts?: {
+			rawProbabilities?: number[][];
+			rawTrueIndices?: number[];
+			rocCurve?: {
+				fpr: number[];
+				tpr: number[];
+				thresholds: number[];
+				auc?: number;
+			};
+			prCurve?: { recall: number[]; precision: number[]; thresholds: number[] };
+		},
+	) {
+		this.state.testExport.hasTestResults = true;
+		this.state.testExport.testMetrics = metrics;
+		this.state.testExport.confusionMatrix = confusionMatrix;
+		if (artifacts) {
+			this.state.testExport.rawProbabilities = artifacts.rawProbabilities;
+			this.state.testExport.rawTrueIndices = artifacts.rawTrueIndices;
+			this.state.testExport.rocCurve = artifacts.rocCurve;
+			this.state.testExport.prCurve = artifacts.prCurve;
+		}
+		this.notify();
+	}
+
+	clearTestResults() {
+		this.state.testExport.hasTestResults = false;
+		this.state.testExport.testMetrics = undefined;
+		this.state.testExport.confusionMatrix = undefined;
+		this.state.testExport.rawProbabilities = undefined;
+		this.state.testExport.rawTrueIndices = undefined;
+		this.state.testExport.rocCurve = undefined;
+		this.state.testExport.prCurve = undefined;
 		this.notify();
 	}
 
@@ -267,21 +377,38 @@ class ClassroomStore {
 		}
 	}
 
-	private loadFromStorage() {
+	private loadFromStorage(): boolean {
 		try {
 			if (typeof window === 'undefined' || typeof localStorage === 'undefined')
-				return; // SSR guard
+				return false; // SSR guard
 			const saved = localStorage.getItem(this.STORAGE_KEY);
 			if (saved) {
 				const parsedState = JSON.parse(saved);
-				// Migration: remove deprecated 'combined' data source
-				if (parsedState?.dataInput?.selectedDataSource === 'combined') {
+				// Migration: remove deprecated data sources ('combined', 'k2')
+				if (
+					parsedState?.dataInput?.selectedDataSource === 'combined' ||
+					parsedState?.dataInput?.selectedDataSource === 'k2'
+				) {
 					parsedState.dataInput.selectedDataSource = 'kepler';
 				}
-				this.state = { ...this.state, ...parsedState };
+				// Merge but intentionally discard any persisted training & test progress so a refresh starts clean
+				const {
+					training: _ignoredTraining,
+					testExport: _ignoredTest,
+					...rest
+				} = parsedState;
+				this.state = {
+					...this.state,
+					...rest,
+					training: this.getInitialState().training,
+					testExport: this.getInitialState().testExport,
+				};
+				return true;
 			}
+			return false;
 		} catch (error) {
 			console.warn('Failed to load classroom state from localStorage:', error);
+			return false;
 		}
 	}
 
@@ -307,8 +434,31 @@ class ClassroomStore {
 	clearTraining() {
 		this.state.training = {
 			isTraining: false,
+			hasTrainedModel: false,
+			trainingProgress: [],
+			modelMetrics: null,
+			currentRun: undefined,
+			preparedDataset: undefined,
+			lastProgressAt: undefined,
 		};
 		this.notify();
+	}
+
+	// Normalize inconsistent training state (e.g., app reloaded mid-training)
+	ensureTrainingConsistency(maxStaleMs: number = 15000) {
+		const t = this.state.training;
+		if (!t.isTraining) return; // only act on active training
+		const noProgress = !t.trainingProgress || t.trainingProgress.length === 0;
+		const tooStale =
+			!t.lastProgressAt || Date.now() - t.lastProgressAt > maxStaleMs;
+		if (noProgress || tooStale) {
+			// Consider it stale; reset isTraining flag but retain any partial metrics for inspection
+			console.warn(
+				'[ClassroomStore] Detected stale training state. Normalizing.',
+			);
+			t.isTraining = false;
+			this.notify();
+		}
 	}
 }
 
@@ -320,6 +470,8 @@ export function useClassroomStore(): [ClassroomState, ClassroomStore] {
 	const [state, setState] = React.useState(classroomStore.getState());
 
 	React.useEffect(() => {
+		// Defer localStorage hydration to after mount to prevent hydration mismatch
+		classroomStore.initFromStorage();
 		const unsubscribe = classroomStore.subscribe(setState);
 		return unsubscribe;
 	}, []);

@@ -1,21 +1,14 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 
+// K2 dataset endpoint deprecated: K2 data is no longer supported.
+// Always returns 410 Gone so any lingering client calls fail fast.
 export async function GET() {
-	try {
-		const filePath = path.join(process.cwd(), 'data', 'K2-Classroom-Data.csv');
-		const data = await fs.readFile(filePath, 'utf-8');
-		return new NextResponse(data, {
-			status: 200,
-			headers: {
-				'Content-Type': 'text/csv; charset=utf-8',
-			},
-		});
-	} catch (err: any) {
-		return NextResponse.json(
-			{ error: 'Failed to load K2 dataset', details: err?.message },
-			{ status: 500 },
-		);
-	}
+	return NextResponse.json(
+		{
+			error: 'K2 dataset deprecated',
+			message:
+				'The K2 classroom dataset has been removed. Use kepler (KOI) or tess data sources.',
+		},
+		{ status: 410 },
+	);
 }

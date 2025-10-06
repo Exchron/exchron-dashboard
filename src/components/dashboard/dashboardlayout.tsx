@@ -6,6 +6,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { AIChatPopup } from '../ui/AIChatPopup';
 import { PredictionProvider } from './predictioncontext';
+import AiImg from '../../../assets/logos/ai.png';
+import exchronLogo from '../../../assets/Logo.png';
 
 interface DashboardLayoutProps {
 	children: React.ReactNode;
@@ -162,6 +164,15 @@ export default function DashboardLayout({
 		}
 	};
 
+	const handleContactClick = () => {
+		const gmailCompose =
+			'https://mail.google.com/mail/?view=cm&fs=1&to=info.exchron@gmail.com';
+		const opened = window.open(gmailCompose, '_blank', 'noopener,noreferrer');
+		if (!opened) {
+			window.location.href = 'mailto:info.exchron@gmail.com';
+		}
+	};
+
 	return (
 		<PredictionProvider>
 			<div className="min-h-screen bg-[#ECECEC] flex">
@@ -169,9 +180,13 @@ export default function DashboardLayout({
 				<aside className="w-[240px] min-h-screen bg-[#F9F9F9] border border-[#D1D1D1] shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] flex flex-col fixed left-0 top-0 bottom-0">
 					{/* Logo */}
 					<div className="p-6 flex items-center gap-3">
-						<div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-							{/* Placeholder for logo */}
-							<span className="text-xl font-bold">E</span>
+						<div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+							<Image
+								src={exchronLogo}
+								alt="Exchron Logo"
+								width={40}
+								height={40}
+							/>
 						</div>
 						<h1 className="text-2xl font-bold tracking-tight">Exchron</h1>
 					</div>
@@ -183,32 +198,53 @@ export default function DashboardLayout({
 
 					{/* Create model section - Different content based on mode */}
 					<div className="mt-auto p-4">
-						{selectedMode === 'Classroom' ? (
-							<div className="bg-[var(--hover-background)] border border-[var(--input-border)] rounded-xl p-5 mb-4">
-								<h3 className="font-medium text-xl mb-2">Try our model</h3>
-								<p className="text-sm text-[var(--text-neutral)]">
-									Try <strong>Playground Mode</strong> to see our own Machine
-									Learning Model in action.
-									<br />
-									<br />
-									Visit Documentation for more information.
-								</p>
-							</div>
-						) : (
-							<div className="bg-[var(--hover-background)] border border-[var(--input-border)] rounded-xl p-5 mb-4">
-								<h3 className="font-medium text-xl mb-2">Create your model</h3>
-								<p className="text-sm text-[var(--text-neutral)]">
-									Try <strong>Classroom Mode</strong> to create your own Machine
-									Learning Model.
-									<br />
-									<br />
-									Visit Documentation for more information.
-								</p>
-							</div>
-						)}
+						{/* Unified informational card for both Classroom & Playground */}
+						<a
+							className="block bg-[var(--hover-background)] border border-[var(--input-border)] rounded-xl p-5 mb-4 hover:shadow-sm transition-shadow"
+							href="https://learn.exchronai.earth"
+							target="_blank"
+							rel="noopener noreferrer"
+							aria-label="Learn more about exoplanets on learn.exchronai.earth (opens in new tab)"
+						>
+							<h3 className="text-xl mb-2">
+								<span className="font-medium">Learn more about exoplanets</span>
+							</h3>
+							<p className="text-sm text-[var(--text-neutral)] leading-relaxed">
+								Explore mission data and key planetary traits that power our
+								models. Dive deeper into exoplanet science on our learning
+								platform.
+							</p>
+							<p className="mt-3 text-sm font-semibold text-[var(--muted-text)] flex items-center gap-1">
+								<span>Visit our leaning platform</span>
+								<svg
+									className="w-4 h-4"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+								>
+									<path
+										fillRule="evenodd"
+										d="M5.22 14.78a.75.75 0 001.06 0l7.22-7.22v5.69a.75.75 0 001.5 0v-7.5a.75.75 0 00-.75-.75h-7.5a.75.75 0 000 1.5h5.69l-7.22 7.22a.75.75 0 000 1.06z"
+										clipRule="evenodd"
+									/>
+								</svg>
+							</p>
+						</a>
 
 						{/* Contact */}
-						<div className="bg-[var(--input-background)] border border-[var(--input-border)] rounded-xl p-4 mb-4">
+						<div
+							className="bg-[var(--input-background)] border border-[var(--input-border)] rounded-xl p-4 mb-4 cursor-pointer hover:bg-[var(--hover-background)] transition-colors select-none"
+							role="button"
+							tabIndex={0}
+							onClick={handleContactClick}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									handleContactClick();
+								}
+							}}
+							aria-label="Contact Exchron via email (opens compose window)"
+						>
 							<p className="text-sm">Contact</p>
 							<p className="text-sm flex items-center justify-between">
 								info.exchron@gmail.com
@@ -224,6 +260,9 @@ export default function DashboardLayout({
 										clipRule="evenodd"
 									/>
 								</svg>
+							</p>
+							<p className="mt-1 text-[11px] text-[var(--text-secondary)]">
+								Opens email draft
 							</p>
 						</div>
 
@@ -330,7 +369,9 @@ export default function DashboardLayout({
 						<div className="flex gap-3">
 							{/* Documentation link */}
 							<Link
-								href="#"
+								href="https://docs.exchronai.earth/"
+								target="_blank"
+								rel="noopener noreferrer"
 								className="bg-[var(--background)] border border-[var(--input-border)] rounded-xl p-3 flex items-center gap-2 hover:bg-[var(--hover-background)] transition-colors text-sm"
 							>
 								<span className="font-semibold text-[var(--muted-text)]">
@@ -356,14 +397,7 @@ export default function DashboardLayout({
 								onClick={handleAskAIClick}
 								className="bg-white rounded-xl shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] p-3 flex items-center gap-2 hover:bg-[var(--hover-background)] transition-colors text-sm"
 							>
-								<svg
-									className="w-6 h-6"
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 20 20"
-									fill="currentColor"
-								>
-									<path d="M9.653 16.915l-.005-.003-.019-.01a20.759 20.759 0 01-1.162-.682 22.045 22.045 0 01-2.582-1.9C4.045 12.733 2 10.352 2 7.5a4.5 4.5 0 018-2.828A4.5 4.5 0 0118 7.5c0 2.852-2.044 5.233-3.885 6.82a22.049 22.049 0 01-3.744 2.582l-.019.01-.005.003h-.002a.739.739 0 01-.69.001l-.002-.001z" />
-								</svg>
+								<Image src={AiImg} alt="AI" width={24} height={24} />
 								<span className="font-semibold">Ask AI</span>
 							</button>
 						</div>

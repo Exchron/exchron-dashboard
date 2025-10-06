@@ -35,28 +35,46 @@ export default function ClassroomModelSelectionTab() {
 	];
 
 	const [selectedModel, setSelectedModel] = useState<string>('neural-network');
+	// Store all hyperparameter inputs as strings to allow intermediary (empty / partial) edits without producing NaN warnings
 	const [nnParams, setNnParams] = useState({
 		hiddenLayers: '128,64,32',
-		learningRate: 0.001,
-		epochs: 100,
-		batchSize: 32,
-		dropoutRate: 0.3,
-		validationSplit: 0.2,
+		learningRate: '0.001',
+		epochs: '100',
+		batchSize: '32',
+		dropoutRate: '0.3',
+		validationSplit: '0.2',
 	});
 
 	// Persist hyperparams to store whenever they change
 	useEffect(() => {
+		// Parse numeric values safely; fallback to sensible defaults if invalid
+		const hiddenLayers = nnParams.hiddenLayers
+			.split(',')
+			.map((v) => parseInt(v.trim()))
+			.filter((v) => !isNaN(v) && v > 0);
+		const learningRate = parseFloat(nnParams.learningRate);
+		const epochs = parseInt(nnParams.epochs);
+		const batchSize = parseInt(nnParams.batchSize);
+		const dropoutRate = parseFloat(nnParams.dropoutRate);
+		const validationSplit = parseFloat(nnParams.validationSplit);
+
 		classroomStore.setHyperparams({
 			modelType: selectedModel,
-			hiddenLayers: nnParams.hiddenLayers
-				.split(',')
-				.map((v) => parseInt(v.trim()))
-				.filter((v) => !isNaN(v)),
-			learningRate: nnParams.learningRate,
-			epochs: nnParams.epochs,
-			batchSize: nnParams.batchSize,
-			dropoutRate: nnParams.dropoutRate,
-			validationSplit: nnParams.validationSplit,
+			hiddenLayers: hiddenLayers.length ? hiddenLayers : [128, 64, 32],
+			learningRate:
+				isFinite(learningRate) && learningRate > 0 ? learningRate : 0.001,
+			epochs: isFinite(epochs) && epochs > 0 ? epochs : 100,
+			batchSize: isFinite(batchSize) && batchSize > 0 ? batchSize : 32,
+			dropoutRate:
+				isFinite(dropoutRate) && dropoutRate >= 0 && dropoutRate < 1
+					? dropoutRate
+					: 0.3,
+			validationSplit:
+				isFinite(validationSplit) &&
+				validationSplit >= 0.05 &&
+				validationSplit <= 0.8
+					? validationSplit
+					: 0.2,
 		});
 	}, [nnParams, selectedModel]);
 
@@ -224,7 +242,7 @@ export default function ClassroomModelSelectionTab() {
 												onChange={(e) =>
 													setNnParams((p) => ({
 														...p,
-														learningRate: parseFloat(e.target.value),
+														learningRate: e.target.value,
 													}))
 												}
 												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
@@ -242,7 +260,7 @@ export default function ClassroomModelSelectionTab() {
 												onChange={(e) =>
 													setNnParams((p) => ({
 														...p,
-														epochs: parseInt(e.target.value),
+														epochs: e.target.value,
 													}))
 												}
 												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
@@ -260,7 +278,7 @@ export default function ClassroomModelSelectionTab() {
 												onChange={(e) =>
 													setNnParams((p) => ({
 														...p,
-														batchSize: parseInt(e.target.value),
+														batchSize: e.target.value,
 													}))
 												}
 												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
@@ -279,7 +297,7 @@ export default function ClassroomModelSelectionTab() {
 												onChange={(e) =>
 													setNnParams((p) => ({
 														...p,
-														dropoutRate: parseFloat(e.target.value),
+														dropoutRate: e.target.value,
 													}))
 												}
 												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
@@ -298,7 +316,7 @@ export default function ClassroomModelSelectionTab() {
 												onChange={(e) =>
 													setNnParams((p) => ({
 														...p,
-														validationSplit: parseFloat(e.target.value),
+														validationSplit: e.target.value,
 													}))
 												}
 												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"

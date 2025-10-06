@@ -262,19 +262,54 @@ export class CSVParser {
 			errors.push('Dataset must contain at least 10 rows for training');
 		}
 
-		// Check for potential target columns
-		const categoricalColumns = columnMeta.filter(
+		// Check for potential target columns (categorical/boolean first)
+		let categoricalColumns = columnMeta.filter(
 			(col) =>
 				col.inferredType === 'categorical' || col.inferredType === 'boolean',
 		);
 
+		// Fallback: If none found, attempt to coerce a low-cardinality numeric column as pseudo-categorical target.
+		// Rationale: Many user CSVs encode targets as 0/1 or small integer labels without quotes.
 		if (categoricalColumns.length === 0) {
-			errors.push(
-				'No suitable target column found. Dataset should contain at least one categorical column.',
-			);
+			const numericLowCardinality: InferredColumnMeta[] = [];
+			for (const col of columnMeta) {
+				if (col.inferredType === 'numeric') {
+					const uniques = new Set<number>();
+					for (let r = 0; r < rows.length; r++) {
+						const v = rows[r][col.index];
+						if (v != null && v.trim() !== '') {
+							const num = parseFloat(v);
+							if (!isNaN(num)) uniques.add(num);
+							if (uniques.size > 15) break;
+						}
+					}
+					if (uniques.size >= 2 && uniques.size <= 10) {
+						const clone: InferredColumnMeta = {
+							...col,
+							inferredType: 'categorical',
+							uniqueValues: Array.from(uniques)
+								.slice(0, 50)
+								.map((n) => String(n)),
+						};
+						numericLowCardinality.push(clone);
+					}
+				}
+			}
+			if (numericLowCardinality.length > 0) {
+				console.warn(
+					'[Inference] No categorical/boolean columns found. Using low-cardinality numeric column(s) as fallback target candidate(s):',
+					numericLowCardinality.map((c) => c.name),
+				);
+				categoricalColumns = numericLowCardinality;
+			} else {
+				// SOFT FAIL: Instead of pushing an error, log a warning and allow UI to request manual target selection.
+				console.warn(
+					'[Validation] No target-like column detected (categorical/boolean or low-cardinality numeric). User must manually choose a target.',
+				);
+			}
 		}
 
-		// Check feature columns
+		// Check feature columns (numeric, categorical). Boolean counts as categorical already.
 		const featureColumns = columnMeta.filter(
 			(col) =>
 				col.inferredType === 'numeric' || col.inferredType === 'categorical',
@@ -286,24 +321,21 @@ export class CSVParser {
 			);
 		}
 
-		// Check for columns with too many missing values
+		// Check for columns with too many missing values (SOFT WARNING now)
 		const problematicColumns = columnMeta.filter(
 			(col) => col.missingCount / rows.length > 0.5,
 		);
-
 		if (problematicColumns.length > 0) {
-			errors.push(
-				`Columns with >50% missing values: ${problematicColumns
-					.map((c) => c.name)
-					.join(', ')}`,
+			console.warn(
+				'[Quality] Columns with >50% missing values detected:',
+				problematicColumns.map((c) => c.name),
 			);
 		}
 
-		// Check for columns with only one unique value
+		// Warn about constant columns (not fatal)
 		const constantColumns = columnMeta.filter(
 			(col) => col.uniqueValues && col.uniqueValues.length <= 1,
 		);
-
 		if (constantColumns.length > 0) {
 			console.warn(
 				'Columns with constant values detected:',
@@ -311,6 +343,7 @@ export class CSVParser {
 			);
 		}
 
+		// If the ONLY potential issue would have been missing target, we now allow flow to continue.
 		if (errors.length > 0) {
 			throw new Error(`Dataset validation failed:\n${errors.join('\n')}`);
 		}

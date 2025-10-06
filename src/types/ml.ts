@@ -89,7 +89,7 @@ export interface ExportArtifact {
 
 // UI state interfaces
 export interface DataInputState {
-	selectedDataSource: 'kepler' | 'k2' | 'tess' | 'own';
+	selectedDataSource: 'kepler' | 'tess' | 'own';
 	uploadedFile?: File;
 	rawDataset?: RawDataset;
 	columnMeta?: InferredColumnMeta[];
@@ -109,6 +109,17 @@ export interface TrainingState {
 	currentRun?: TrainingRun;
 	isTraining: boolean;
 	preparedDataset?: PreparedDataset;
+	hasTrainedModel?: boolean; // indicates a model finished training in session
+	modelMetrics?: any; // final training metrics for display
+	trainingProgress?: Array<{
+		epoch: number;
+		loss: number;
+		accuracy: number;
+		valLoss?: number;
+		valAccuracy?: number;
+	}>; // training progress data for visualization
+	// Timestamp of last progress update (ms since epoch) for stall detection & normalization
+	lastProgressAt?: number;
 }
 
 export interface TestExportState {
@@ -116,6 +127,26 @@ export interface TestExportState {
 	manualInputValues: Record<string, any>;
 	batchTestFile?: File;
 	exportFormat: 'json-custom' | 'json-tfjs';
+	hasTestResults?: boolean; // whether user initiated model testing
+	testMetrics?: {
+		accuracy: number;
+		precision?: number;
+		recall?: number;
+		f1?: number;
+		loss?: number;
+		valAccuracy?: number;
+	};
+	confusionMatrix?: number[][]; // basic confusion matrix for classification
+	// Extended evaluation artifacts
+	rawProbabilities?: number[][]; // each row: class probability distribution
+	rawTrueIndices?: number[]; // true class indices parallel to rawProbabilities
+	rocCurve?: {
+		fpr: number[];
+		tpr: number[];
+		thresholds: number[];
+		auc?: number;
+	};
+	prCurve?: { recall: number[]; precision: number[]; thresholds: number[] };
 }
 
 // Classroom store state

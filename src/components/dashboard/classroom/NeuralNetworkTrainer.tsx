@@ -66,9 +66,6 @@ export default function NeuralNetworkTrainer() {
 			case 'kepler':
 				fileName = 'KOI-Classroom-Data.csv';
 				break;
-			case 'k2':
-				fileName = 'K2-Classroom-Data.csv';
-				break;
 			case 'tess':
 				fileName = 'TESS-Classroom-Data.csv';
 				break;

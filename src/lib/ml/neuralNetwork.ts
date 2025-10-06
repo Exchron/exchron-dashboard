@@ -77,37 +77,58 @@ export class NeuralNetworkService {
 			throw new Error(`Feature columns not found: ${missingCols.join(', ')}`);
 		}
 
-		// Extract and clean data
+		// Extract and clean data with diagnostics
 		const data: { features: number[]; target: string }[] = [];
-
+		let totalRows = 0;
+		let invalidFeatureRows = 0;
+		let missingTargetRows = 0;
 		for (let i = 1; i < lines.length; i++) {
-			const row = lines[i].split(',').map((cell) => cell.trim());
-			if (row.length !== headers.length) continue;
-
-			// Extract features (convert to numbers)
+			const raw = lines[i];
+			if (!raw.trim()) continue;
+			totalRows++;
+			const row = raw.split(',').map((cell) => cell.trim());
+			if (row.length !== headers.length) {
+				invalidFeatureRows++;
+				continue;
+			}
 			const features: number[] = [];
-			let validRow = true;
-
+			let featureInvalid = false;
 			for (const idx of featureIndices) {
-				const value = parseFloat(row[idx]);
+				const cell = row[idx];
+				if (cell === '' || cell == null) {
+					featureInvalid = true;
+					break;
+				}
+				const value = parseFloat(cell);
 				if (isNaN(value)) {
-					validRow = false;
+					featureInvalid = true;
 					break;
 				}
 				features.push(value);
 			}
-
-			if (validRow && row[targetIndex]) {
-				data.push({
-					features,
-					target: row[targetIndex].toLowerCase().trim(),
-				});
+			if (featureInvalid) {
+				invalidFeatureRows++;
+				continue;
 			}
+			const targetRaw = row[targetIndex];
+			if (!targetRaw || targetRaw.trim() === '') {
+				missingTargetRows++;
+				continue;
+			}
+			data.push({
+				features,
+				target: targetRaw.toLowerCase().trim(),
+			});
 		}
 
 		if (data.length === 0) {
-			throw new Error('No valid data rows found');
+			throw new Error(
+				`No valid data rows found (total=${totalRows}, invalidFeatureRows=${invalidFeatureRows}, missingTargetRows=${missingTargetRows}). Ensure selected feature columns are purely numeric and target column is populated.`,
+			);
 		}
+		console.log(
+			`Row filtering summary: kept=${data.length}, total=${totalRows}, droppedFeature=${invalidFeatureRows}, droppedMissingTarget=${missingTargetRows}`,
+		);
 
 		console.log(`Preprocessed ${data.length} valid samples`);
 

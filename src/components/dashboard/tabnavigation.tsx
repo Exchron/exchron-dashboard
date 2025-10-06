@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useClassroomStore } from '../../lib/ml/state/classroomStore';
 
 interface TabNavigationProps {
 	activeTab: string;
@@ -7,6 +8,7 @@ interface TabNavigationProps {
 }
 
 export default function TabNavigation({ activeTab, mode }: TabNavigationProps) {
+	const [classroomState] = useClassroomStore();
 	// Tabs for Playground mode
 	const playgroundTabs = [
 		{
@@ -36,7 +38,7 @@ export default function TabNavigation({ activeTab, mode }: TabNavigationProps) {
 	];
 
 	// Tabs for Classroom mode
-	const classroomTabs = [
+	const classroomTabsBase = [
 		{
 			id: 'data-input',
 			number: '01',
@@ -56,6 +58,19 @@ export default function TabNavigation({ activeTab, mode }: TabNavigationProps) {
 			href: '/dashboard/classroom/train-validate',
 		},
 	];
+
+	const hasTestTab = !!classroomState.testExport.hasTestResults;
+	const classroomTabs = hasTestTab
+		? [
+				...classroomTabsBase,
+				{
+					id: 'test-export',
+					number: '04',
+					name: 'Test and Export',
+					href: '/dashboard/classroom/test-export',
+				},
+		  ]
+		: classroomTabsBase;
 
 	// Use state to prevent flickering during mode changes
 	const [currentTabs, setCurrentTabs] = useState(playgroundTabs);
