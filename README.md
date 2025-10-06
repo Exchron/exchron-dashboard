@@ -52,6 +52,11 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - Tab-based navigation between different sections
 - Placeholder visualizations for charts and graphs
 
+### Classroom Mode Enhancements
+
+- 80/20 dataset split: a dedicated 20% test subset is held out during training. Neural Network uses an internal shuffle with ~64% train, 16% validation, 20% test. Random Forest trains on the 80% portion and reserves 20% for later evaluation.
+- Random Forest visualization refined: removed emoji indicators; active tree now uses a subtle opacity blink animation (`rf-blink`). Completed trees show minimal dots for a cleaner aesthetic.
+
 ## Technologies Used
 
 - Next.js

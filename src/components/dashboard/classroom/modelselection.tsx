@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { classroomStore } from '../../../lib/ml/state/classroomStore';
 
 export default function ClassroomModelSelectionTab() {
-	// Model options (only NN fully enabled for now)
+	// Model options
 	const modelOptions = [
 		{
 			id: 'neural-network',
@@ -21,7 +21,7 @@ export default function ClassroomModelSelectionTab() {
 			name: 'Random Forest',
 			description:
 				'Ensemble of decision trees. Great baseline for tabular feature importance.',
-			comingSoon: true,
+			comingSoon: false,
 			icon: '🌳',
 		},
 		{
@@ -45,38 +45,78 @@ export default function ClassroomModelSelectionTab() {
 		validationSplit: '0.2',
 	});
 
+	// Random Forest hyperparameters
+	const [rfParams, setRfParams] = useState({
+		nEstimators: '100',
+		maxDepth: '10',
+		minSamplesSplit: '2',
+		minSamplesLeaf: '1',
+		maxFeatures: 'sqrt',
+		bootstrap: 'true',
+		randomState: '42',
+	});
+
 	// Persist hyperparams to store whenever they change
 	useEffect(() => {
-		// Parse numeric values safely; fallback to sensible defaults if invalid
-		const hiddenLayers = nnParams.hiddenLayers
-			.split(',')
-			.map((v) => parseInt(v.trim()))
-			.filter((v) => !isNaN(v) && v > 0);
-		const learningRate = parseFloat(nnParams.learningRate);
-		const epochs = parseInt(nnParams.epochs);
-		const batchSize = parseInt(nnParams.batchSize);
-		const dropoutRate = parseFloat(nnParams.dropoutRate);
-		const validationSplit = parseFloat(nnParams.validationSplit);
+		if (selectedModel === 'neural-network') {
+			// Parse numeric values safely; fallback to sensible defaults if invalid
+			const hiddenLayers = nnParams.hiddenLayers
+				.split(',')
+				.map((v) => parseInt(v.trim()))
+				.filter((v) => !isNaN(v) && v > 0);
+			const learningRate = parseFloat(nnParams.learningRate);
+			const epochs = parseInt(nnParams.epochs);
+			const batchSize = parseInt(nnParams.batchSize);
+			const dropoutRate = parseFloat(nnParams.dropoutRate);
+			const validationSplit = parseFloat(nnParams.validationSplit);
 
-		classroomStore.setHyperparams({
-			modelType: selectedModel,
-			hiddenLayers: hiddenLayers.length ? hiddenLayers : [128, 64, 32],
-			learningRate:
-				isFinite(learningRate) && learningRate > 0 ? learningRate : 0.001,
-			epochs: isFinite(epochs) && epochs > 0 ? epochs : 100,
-			batchSize: isFinite(batchSize) && batchSize > 0 ? batchSize : 32,
-			dropoutRate:
-				isFinite(dropoutRate) && dropoutRate >= 0 && dropoutRate < 1
-					? dropoutRate
-					: 0.3,
-			validationSplit:
-				isFinite(validationSplit) &&
-				validationSplit >= 0.05 &&
-				validationSplit <= 0.8
-					? validationSplit
-					: 0.2,
-		});
-	}, [nnParams, selectedModel]);
+			classroomStore.setHyperparams({
+				modelType: selectedModel,
+				hiddenLayers: hiddenLayers.length ? hiddenLayers : [128, 64, 32],
+				learningRate:
+					isFinite(learningRate) && learningRate > 0 ? learningRate : 0.001,
+				epochs: isFinite(epochs) && epochs > 0 ? epochs : 100,
+				batchSize: isFinite(batchSize) && batchSize > 0 ? batchSize : 32,
+				dropoutRate:
+					isFinite(dropoutRate) && dropoutRate >= 0 && dropoutRate < 1
+						? dropoutRate
+						: 0.3,
+				validationSplit:
+					isFinite(validationSplit) &&
+					validationSplit >= 0.05 &&
+					validationSplit <= 0.8
+						? validationSplit
+						: 0.2,
+			});
+		} else if (selectedModel === 'random-forest') {
+			// Parse Random Forest hyperparameters
+			const nEstimators = parseInt(rfParams.nEstimators);
+			const maxDepth = parseInt(rfParams.maxDepth);
+			const minSamplesSplit = parseInt(rfParams.minSamplesSplit);
+			const minSamplesLeaf = parseInt(rfParams.minSamplesLeaf);
+			const maxFeatures = isNaN(parseInt(rfParams.maxFeatures))
+				? rfParams.maxFeatures
+				: parseInt(rfParams.maxFeatures);
+			const bootstrap = rfParams.bootstrap === 'true';
+			const randomState = parseInt(rfParams.randomState);
+
+			classroomStore.setHyperparams({
+				modelType: selectedModel,
+				nEstimators:
+					isFinite(nEstimators) && nEstimators > 0 ? nEstimators : 100,
+				maxDepth: isFinite(maxDepth) && maxDepth > 0 ? maxDepth : 10,
+				minSamplesSplit:
+					isFinite(minSamplesSplit) && minSamplesSplit >= 2
+						? minSamplesSplit
+						: 2,
+				minSamplesLeaf:
+					isFinite(minSamplesLeaf) && minSamplesLeaf >= 1 ? minSamplesLeaf : 1,
+				maxFeatures: maxFeatures,
+				bootstrap: bootstrap,
+				randomState: isFinite(randomState) ? randomState : 42,
+			});
+		}
+	}, [nnParams, rfParams, selectedModel]);
 
 	return (
 		<div className="grid grid-cols-1 gap-6">
@@ -137,8 +177,7 @@ export default function ClassroomModelSelectionTab() {
 						<CardTitle>Select Model</CardTitle>
 						<CardContent>
 							<p className="text-sm mb-4">
-								Choose a model architecture. Only Neural Network is currently
-								available; others are coming soon.
+								Choose a model architecture for your machine learning task.
 							</p>
 							<div className="space-y-3">
 								{modelOptions.map((m) => {
@@ -193,15 +232,18 @@ export default function ClassroomModelSelectionTab() {
 						<CardTitle>
 							{selectedModel === 'neural-network'
 								? 'Neural Network Configuration'
+								: selectedModel === 'random-forest'
+								? 'Random Forest Configuration'
 								: 'Configuration'}
 						</CardTitle>
 						<CardContent>
-							{selectedModel !== 'neural-network' && (
-								<div className="p-8 bg-gray-50 rounded-lg text-center text-sm text-gray-600">
-									Configuration options will be available once this model type
-									is implemented.
-								</div>
-							)}
+							{selectedModel !== 'neural-network' &&
+								selectedModel !== 'random-forest' && (
+									<div className="p-8 bg-gray-50 rounded-lg text-center text-sm text-gray-600">
+										Configuration options will be available once this model type
+										is implemented.
+									</div>
+								)}
 							{selectedModel === 'neural-network' && (
 								<>
 									<p className="mb-4 text-sm">
@@ -328,6 +370,174 @@ export default function ClassroomModelSelectionTab() {
 										{nnParams.learningRate} | Epochs: {nnParams.epochs} | Batch:{' '}
 										{nnParams.batchSize} | Dropout: {nnParams.dropoutRate} | Val
 										Split: {nnParams.validationSplit}
+									</div>
+								</>
+							)}
+							{selectedModel === 'random-forest' && (
+								<>
+									<p className="mb-4 text-sm">
+										Configure the Random Forest hyperparameters. These settings
+										control the ensemble behavior, tree complexity, and feature
+										sampling.
+									</p>
+									<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+										<div className="space-y-2">
+											<label className="block text-sm font-medium">
+												Number of Estimators
+											</label>
+											<input
+												type="number"
+												min="10"
+												max="1000"
+												value={rfParams.nEstimators}
+												onChange={(e) =>
+													setRfParams((p) => ({
+														...p,
+														nEstimators: e.target.value,
+													}))
+												}
+												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
+											/>
+											<p className="text-xs text-gray-500">
+												Number of trees in the forest
+											</p>
+										</div>
+										<div className="space-y-2">
+											<label className="block text-sm font-medium">
+												Max Depth
+											</label>
+											<input
+												type="number"
+												min="1"
+												max="50"
+												value={rfParams.maxDepth}
+												onChange={(e) =>
+													setRfParams((p) => ({
+														...p,
+														maxDepth: e.target.value,
+													}))
+												}
+												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
+											/>
+											<p className="text-xs text-gray-500">
+												Maximum depth of trees
+											</p>
+										</div>
+										<div className="space-y-2">
+											<label className="block text-sm font-medium">
+												Min Samples Split
+											</label>
+											<input
+												type="number"
+												min="2"
+												max="20"
+												value={rfParams.minSamplesSplit}
+												onChange={(e) =>
+													setRfParams((p) => ({
+														...p,
+														minSamplesSplit: e.target.value,
+													}))
+												}
+												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
+											/>
+											<p className="text-xs text-gray-500">
+												Min samples required to split
+											</p>
+										</div>
+										<div className="space-y-2">
+											<label className="block text-sm font-medium">
+												Min Samples Leaf
+											</label>
+											<input
+												type="number"
+												min="1"
+												max="10"
+												value={rfParams.minSamplesLeaf}
+												onChange={(e) =>
+													setRfParams((p) => ({
+														...p,
+														minSamplesLeaf: e.target.value,
+													}))
+												}
+												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
+											/>
+											<p className="text-xs text-gray-500">
+												Min samples in leaf nodes
+											</p>
+										</div>
+										<div className="space-y-2">
+											<label className="block text-sm font-medium">
+												Max Features
+											</label>
+											<select
+												value={rfParams.maxFeatures}
+												onChange={(e) =>
+													setRfParams((p) => ({
+														...p,
+														maxFeatures: e.target.value,
+													}))
+												}
+												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
+											>
+												<option value="sqrt">sqrt</option>
+												<option value="log2">log2</option>
+												<option value="1">1</option>
+												<option value="2">2</option>
+												<option value="3">3</option>
+											</select>
+											<p className="text-xs text-gray-500">
+												Features to consider for splits
+											</p>
+										</div>
+										<div className="space-y-2">
+											<label className="block text-sm font-medium">
+												Bootstrap
+											</label>
+											<select
+												value={rfParams.bootstrap}
+												onChange={(e) =>
+													setRfParams((p) => ({
+														...p,
+														bootstrap: e.target.value,
+													}))
+												}
+												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
+											>
+												<option value="true">Yes</option>
+												<option value="false">No</option>
+											</select>
+											<p className="text-xs text-gray-500">
+												Use bootstrap sampling
+											</p>
+										</div>
+										<div className="space-y-2">
+											<label className="block text-sm font-medium">
+												Random State
+											</label>
+											<input
+												type="number"
+												min="0"
+												max="999999"
+												value={rfParams.randomState}
+												onChange={(e) =>
+													setRfParams((p) => ({
+														...p,
+														randomState: e.target.value,
+													}))
+												}
+												className="w-full p-2 border border-[#AFAFAF] rounded bg-[#F9F9F9] text-sm"
+											/>
+											<p className="text-xs text-gray-500">
+												Seed for reproducibility
+											</p>
+										</div>
+									</div>
+									<div className="mt-6 p-4 bg-green-50 rounded-lg text-xs text-green-700">
+										Estimators: {rfParams.nEstimators} | Max Depth:{' '}
+										{rfParams.maxDepth} | Min Split: {rfParams.minSamplesSplit}{' '}
+										| Min Leaf: {rfParams.minSamplesLeaf} | Max Features:{' '}
+										{rfParams.maxFeatures} | Bootstrap: {rfParams.bootstrap} |
+										Random State: {rfParams.randomState}
 									</div>
 								</>
 							)}

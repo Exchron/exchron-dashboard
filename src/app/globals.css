@@ -45,6 +45,22 @@ body {
 	font-family: var(--font-inter, 'Inter', Arial, Helvetica, sans-serif);
 }
 
+/* Random Forest training blink animation (subtle opacity pulse) */
+@keyframes rfBlink {
+	0% {
+		opacity: 0.35;
+	}
+	50% {
+		opacity: 0.9;
+	}
+	100% {
+		opacity: 0.35;
+	}
+}
+.rf-blink {
+	animation: rfBlink 1.2s ease-in-out infinite;
+}
+
 /* Custom scrollbar for light theme UI */
 ::-webkit-scrollbar {
 	width: 8px;

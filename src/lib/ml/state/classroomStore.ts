@@ -58,6 +58,7 @@ class ClassroomStore {
 			training: {
 				isTraining: false,
 				hasTrainedModel: false,
+				trainedModel: undefined,
 			},
 			testExport: {
 				threshold: 0.5,
@@ -231,8 +232,23 @@ class ClassroomStore {
 		this.notify();
 	}
 
+	setTestDataset(testData: {
+		features: number[][];
+		labels: number[];
+		featureNames: string[];
+		classLabels?: string[];
+	}) {
+		this.state.training.testDataset = testData;
+		this.notify();
+	}
+
 	setHasTrainedModel(flag: boolean) {
 		this.state.training.hasTrainedModel = flag;
+		this.notify();
+	}
+
+	setTrainedModel(model: any) {
+		this.state.training.trainedModel = model;
 		this.notify();
 	}
 
@@ -435,11 +451,13 @@ class ClassroomStore {
 		this.state.training = {
 			isTraining: false,
 			hasTrainedModel: false,
+			trainedModel: undefined,
 			trainingProgress: [],
 			modelMetrics: null,
 			currentRun: undefined,
 			preparedDataset: undefined,
 			lastProgressAt: undefined,
+			testDataset: undefined,
 		};
 		this.notify();
 	}

@@ -46,9 +46,30 @@ export interface PreparedDataset {
 
 export interface ModelConfigBase {
 	id: string;
-	type: 'logistic' | 'neuralnet' | 'decision-tree';
+	type: 'logistic' | 'neuralnet' | 'decision-tree' | 'random-forest';
 	createdAt: number;
 	hyperparams: Record<string, number | string | boolean>;
+}
+
+export interface RandomForestHyperparams {
+	modelType: 'random-forest';
+	nEstimators: number;
+	maxDepth: number;
+	minSamplesSplit: number;
+	minSamplesLeaf: number;
+	maxFeatures: 'sqrt' | 'log2' | number;
+	bootstrap: boolean;
+	randomState?: number;
+}
+
+export interface NeuralNetworkHyperparams {
+	modelType: 'neural-network';
+	hiddenLayers: number[];
+	learningRate: number;
+	epochs: number;
+	batchSize: number;
+	dropoutRate: number;
+	validationSplit: number;
 }
 
 export interface TrainingRun {
@@ -62,6 +83,12 @@ export interface TrainingRun {
 		valLoss?: number;
 		acc?: number;
 		valAcc?: number;
+	}>;
+	// Random Forest specific metrics
+	treeMetrics?: Array<{
+		treeIndex: number;
+		oobScore?: number;
+		featureImportance?: Record<string, number>;
 	}>;
 	finalMetrics?: EvaluationSummary;
 	startedAt?: number;
@@ -78,6 +105,9 @@ export interface EvaluationSummary {
 	confusionMatrix: number[][];
 	classLabels: string[];
 	threshold: number; // decision threshold used
+	// Random Forest specific metrics
+	featureImportance?: Record<string, number>;
+	oobScore?: number;
 }
 
 export interface ExportArtifact {
@@ -110,6 +140,7 @@ export interface TrainingState {
 	isTraining: boolean;
 	preparedDataset?: PreparedDataset;
 	hasTrainedModel?: boolean; // indicates a model finished training in session
+	trainedModel?: any; // the actual trained model instance (Neural Network or Random Forest)
 	modelMetrics?: any; // final training metrics for display
 	trainingProgress?: Array<{
 		epoch: number;
@@ -120,6 +151,13 @@ export interface TrainingState {
 	}>; // training progress data for visualization
 	// Timestamp of last progress update (ms since epoch) for stall detection & normalization
 	lastProgressAt?: number;
+	// 80/20 split test dataset captured at training time (never persisted across reloads)
+	testDataset?: {
+		features: number[][]; // raw feature rows for test subset
+		labels: number[]; // encoded numeric labels parallel to features
+		featureNames: string[];
+		classLabels?: string[]; // original label strings if available
+	};
 }
 
 export interface TestExportState {

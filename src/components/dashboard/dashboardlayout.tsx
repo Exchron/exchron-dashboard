@@ -180,12 +180,12 @@ export default function DashboardLayout({
 				<aside className="w-[240px] min-h-screen bg-[#F9F9F9] border border-[#D1D1D1] shadow-[0px_0px_40px_0px_rgba(0,0,0,0.08)] flex flex-col fixed left-0 top-0 bottom-0">
 					{/* Logo */}
 					<div className="p-6 flex items-center gap-3">
-						<div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+						<div className="w-10 h-10 bg-transparent ull flex items-center justify-center overflow-hidden">
 							<Image
 								src={exchronLogo}
 								alt="Exchron Logo"
-								width={40}
-								height={40}
+								width={35}
+								height={35}
 							/>
 						</div>
 						<h1 className="text-2xl font-bold tracking-tight">Exchron</h1>

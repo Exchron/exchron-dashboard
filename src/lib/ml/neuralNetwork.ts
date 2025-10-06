@@ -56,7 +56,11 @@ export class NeuralNetworkService {
 		yTrain: tf.Tensor2D;
 		xVal: tf.Tensor2D;
 		yVal: tf.Tensor2D;
+		xTest: tf.Tensor2D;
+		yTest: tf.Tensor2D;
 		numClasses: number;
+		featureNames: string[];
+		labelEncoder: { [k: string]: number };
 	}> {
 		// Parse CSV
 		const lines = csvContent.trim().split('\n');
@@ -180,21 +184,47 @@ export class NeuralNetworkService {
 		// One-hot encode targets for multi-class classification
 		const oneHotTargets = tf.oneHot(targetIndices, numClasses);
 
-		// Split into training and validation sets (80-20 split)
+		// Split into train (64%), validation (16%), test (20%) maintaining original 80/20 overall
 		const totalSamples = features.shape[0];
-		const trainSize = Math.floor(totalSamples * 0.8);
+		const testSize = Math.max(1, Math.floor(totalSamples * 0.2));
+		const remaining = totalSamples - testSize; // 80%
+		const valSize = Math.max(1, Math.floor(remaining * 0.2)); // 16% overall
+		const trainSize = remaining - valSize; // ~64%
 
-		const xTrain = features.slice([0, 0], [trainSize, -1]) as tf.Tensor2D;
-		const yTrain = oneHotTargets.slice([0, 0], [trainSize, -1]) as tf.Tensor2D;
-		const xVal = features.slice([trainSize, 0], [-1, -1]) as tf.Tensor2D;
-		const yVal = oneHotTargets.slice([trainSize, 0], [-1, -1]) as tf.Tensor2D;
+		// Shuffle indices for randomness
+		const indices = tf.util.createShuffledIndices(totalSamples);
+		const trainIdx = indices.slice(0, trainSize);
+		const valIdx = indices.slice(trainSize, trainSize + valSize);
+		const testIdx = indices.slice(trainSize + valSize);
+
+		const gatherRows = (tensor: tf.Tensor2D, rows: number[]) =>
+			tf.stack(
+				rows.map((r) => tensor.gather([r]).reshape([tensor.shape[1]])),
+			) as tf.Tensor2D;
+
+		const xTrain = gatherRows(features as tf.Tensor2D, Array.from(trainIdx));
+		const yTrain = gatherRows(oneHotTargets as any, Array.from(trainIdx));
+		const xVal = gatherRows(features as tf.Tensor2D, Array.from(valIdx));
+		const yVal = gatherRows(oneHotTargets as any, Array.from(valIdx));
+		const xTest = gatherRows(features as tf.Tensor2D, Array.from(testIdx));
+		const yTest = gatherRows(oneHotTargets as any, Array.from(testIdx));
 
 		// Clean up intermediate tensors
 		features.dispose();
 		targetIndices.dispose();
 		oneHotTargets.dispose();
 
-		return { xTrain, yTrain, xVal, yVal, numClasses };
+		return {
+			xTrain,
+			yTrain,
+			xVal,
+			yVal,
+			xTest,
+			yTest,
+			numClasses,
+			featureNames: featureColumns,
+			labelEncoder: this.labelEncoder,
+		};
 	}
 
 	/**

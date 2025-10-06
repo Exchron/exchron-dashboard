@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import aiImg from '../../../assets/logos/ai.png';
 
 interface Message {
 	text: string;
@@ -34,10 +35,12 @@ export const AIChatPopup: React.FC<AIChatPopupProps> = ({
 			}
 		} else {
 			// Add welcome message if no chat history exists
-			setMessages([{
-				text: "Hi! I'm your AI assistant for the Exchron dashboard. I can help you with questions about the application features, UI components, routing, and more. How can I assist you today?",
-				isUser: false
-			}]);
+			setMessages([
+				{
+					text: "Hi! I'm your AI assistant for the Exchron dashboard. I can help you with questions about the application features, UI components, routing, and more. How can I assist you today?",
+					isUser: false,
+				},
+			]);
 		}
 	}, []);
 
@@ -165,12 +168,7 @@ export const AIChatPopup: React.FC<AIChatPopupProps> = ({
 			<div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 rounded-t-lg">
 				<div className="flex items-center gap-3">
 					<div className="w-10 h-10 relative">
-						<Image
-							src="/ai-assistant.svg"
-							alt="AI Assistant"
-							fill
-							className="p-1"
-						/>
+						<Image src={aiImg} alt="AI Assistant" fill className="p-1" />
 					</div>
 					<span className="font-semibold text-gray-800">Exchron-AI-Assist</span>
 				</div>
@@ -205,16 +203,16 @@ export const AIChatPopup: React.FC<AIChatPopupProps> = ({
 						aria-label="Close chat"
 					>
 						<svg
-						xmlns="http://www.w3.org/2000/svg"
-						className="h-5 w-5"
-						viewBox="0 0 20 20"
-						fill="currentColor"
-					>
-						<path
-							fillRule="evenodd"
-							d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-							clipRule="evenodd"
-						/>
+							xmlns="http://www.w3.org/2000/svg"
+							className="h-5 w-5"
+							viewBox="0 0 20 20"
+							fill="currentColor"
+						>
+							<path
+								fillRule="evenodd"
+								d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+								clipRule="evenodd"
+							/>
 						</svg>
 					</button>
 				</div>
