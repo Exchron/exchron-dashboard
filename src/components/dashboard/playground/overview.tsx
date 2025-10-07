@@ -13,6 +13,10 @@ import D_conf_data from '../../../../assets/DNN/conf_data.jpg';
 import correlationMatrix from '../../../../assets/DNN/correlation_matrix.jpg';
 import featureAnalysisImg from '../../../../assets/DNN/feature_analysis.jpg';
 import m_data from '../../../../assets/DNN/m_data.jpg';
+// GB
+import GB_output from '../../../../assets/GB/output.png';
+import GB_output1 from '../../../../assets/GB/output1.png';
+import GB_output3 from '../../../../assets/GB/output3.png';
 
 // Types
 type ModelMetric = {
@@ -113,37 +117,29 @@ const MODELS: PlaygroundModel[] = [
 		id: 'exchron-gb',
 		short: 'EXCHRON-GB',
 		description: [
-			'EXCHRON_GB is a gradient boosting ensemble model specifically optimized for exoplanet classification using engineered astronomical features. The model leverages the power of sequential tree-based learning, where each new tree corrects the errors of previous iterations, creating a robust ensemble that excels at capturing complex non-linear relationships in stellar data. By utilizing features such as stellar parameters, orbital characteristics, and statistical properties derived from light curves, EXCHRON_GB can effectively distinguish between true planetary signals and false positives caused by eclipsing binaries or instrumental artifacts.',
-			'The gradient boosting framework provides exceptional interpretability through feature importance rankings, allowing astronomers to understand which stellar properties are most predictive of planetary candidates. With carefully tuned hyperparameters including learning rate, tree depth, and regularization terms, the model achieves strong generalization while maintaining computational efficiency. This makes EXCHRON_GB particularly valuable for large-scale surveys where quick and reliable classification of thousands of candidates is essential, providing both high accuracy and meaningful insights into the underlying physics of planetary detection.',
+			'EXCHRON_GB is a Gradient Boosting classifier implemented using scikit-learn\'s GradientBoostingClassifier for exoplanet candidate classification. The model uses an ensemble of decision trees trained sequentially, where each tree learns from the errors of previous trees. It processes tabular features extracted from the KOI dataset including orbital period, transit depth, stellar parameters, and signal quality metrics.',
+			'The model uses default scikit-learn parameters with 100 estimators, learning rate of 0.1, and maximum depth of 3. Training was performed on preprocessed KOI data with standard train-test splits. The gradient boosting approach provides built-in feature importance scores, helping identify which astronomical parameters are most predictive for exoplanet classification. Performance is evaluated using standard classification metrics including accuracy, precision, recall, and AUC-ROC.',
 		],
 		architecturePlaceholders: [
 			{ label: 'EXCHRON_GB Architecture' },
 			{ label: 'Feature Importance' },
 		],
 		metrics: [
-			{ label: 'Accuracy', value: 0.942 },
-			{ label: 'Recall', value: 0.925 },
-			{ label: 'Precision', value: 0.938 },
-			{ label: 'F1 Score', value: 0.931 },
-			{ label: 'AUC', value: 0.965 },
-			{ label: 'Latency (ms)', value: 3.2, higherIsBetter: false },
+			{ label: 'Accuracy', value: 0.886 },
+			{ label: 'Recall', value: 0.821 },
+			{ label: 'Precision', value: 0.894 },
+			{ label: 'F1 Score', value: 0.856 },
+			{ label: 'AUC', value: 0.923 },
+			{ label: 'Training Time (s)', value: 12.4, higherIsBetter: false },
 		],
 		parameters: {
 			'Learning Rate': '0.1',
-			'Max Depth': 6,
-			'N Estimators': 150,
-			'Subsample': '0.8',
-			'Min Samples Split': 20,
-			'Min Samples Leaf': 5,
+			'Max Depth': 3,
+			'N Estimators': 100,
+			'Subsample': '1.0',
+			'Min Samples Split': 2,
+			'Min Samples Leaf': 1,
 		},
-		comparisonBaseline: 'EXCHRON_SVM',
-		comparisonMetrics: [
-			{ label: 'Accuracy', model: 0.942, baseline: 0.916 },
-			{ label: 'Recall', model: 0.925, baseline: 0.898 },
-			{ label: 'Precision', model: 0.938, baseline: 0.921 },
-			{ label: 'F1', model: 0.931, baseline: 0.909 },
-			{ label: 'AUC', model: 0.965, baseline: 0.952 },
-		],
 	},
 	{
 		id: 'exchron-svm',
@@ -187,6 +183,7 @@ const numberFormat = (v: number) => (v < 1 ? v.toFixed(4) : v.toFixed(2));
 
 export default function OverviewTab() {
 	const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+	const [modalImage, setModalImage] = useState<{ src: any; alt: string } | null>(null);
 	
 	// Load initial model selection from localStorage
 	React.useEffect(() => {
@@ -200,6 +197,34 @@ export default function OverviewTab() {
 			}
 		}
 	}, []);
+
+	// Close modal when clicking outside
+	const handleModalClick = (e: React.MouseEvent) => {
+		if (e.target === e.currentTarget) {
+			setModalImage(null);
+		}
+	};
+
+	// Close modal on escape key
+	React.useEffect(() => {
+		const handleEscape = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				setModalImage(null);
+			}
+		};
+		
+		if (modalImage) {
+			document.addEventListener('keydown', handleEscape);
+			document.body.style.overflow = 'hidden';
+		} else {
+			document.body.style.overflow = 'unset';
+		}
+		
+		return () => {
+			document.removeEventListener('keydown', handleEscape);
+			document.body.style.overflow = 'unset';
+		};
+	}, [modalImage]);
 	
 	// Lightbox functionality removed per revert request; images now static.
 	const model = useMemo(
@@ -284,8 +309,9 @@ export default function OverviewTab() {
 											<Image
 												src={LightcurveImg}
 												alt="EXCHRON_CNN architecture"
-												className="w-full h-auto rounded-lg border border-[var(--input-border)]"
+												className="w-full h-auto rounded-lg border border-[var(--input-border)] cursor-pointer hover:opacity-80 transition-opacity"
 												placeholder="blur"
+												onClick={() => setModalImage({ src: LightcurveImg, alt: "EXCHRON_CNN Architecture" })}
 											/>
 											<figcaption className="mt-2 text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
 												Architecture
@@ -297,11 +323,26 @@ export default function OverviewTab() {
 											<Image
 												src={featureAnalysisImg}
 												alt="EXCHRON_DNN architecture"
-												className="w-full h-auto rounded-lg border border-[var(--input-border)]"
+												className="w-full h-auto rounded-lg border border-[var(--input-border)] cursor-pointer hover:opacity-80 transition-opacity"
 												placeholder="blur"
+												onClick={() => setModalImage({ src: featureAnalysisImg, alt: "EXCHRON_DNN Feature Branch Architecture" })}
 											/>
 											<figcaption className="mt-2 text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
 												Feature Branch
+											</figcaption>
+										</figure>
+									)}
+									{model.id === 'exchron-gb' && (
+										<figure className="mx-auto max-w-[760px] mb-6 text-center">
+											<Image
+												src={GB_output}
+												alt="EXCHRON_GB Feature Importance"
+												className="w-full h-auto rounded-lg border border-[var(--input-border)] cursor-pointer hover:opacity-80 transition-opacity"
+												placeholder="blur"
+												onClick={() => setModalImage({ src: GB_output, alt: "EXCHRON_GB Feature Importance" })}
+											/>
+											<figcaption className="mt-2 text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
+												Feature Importance
 											</figcaption>
 										</figure>
 									)}
@@ -352,7 +393,8 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${Historyc.width} / ${Historyc.height}`,
 												}}
-												className="w-full"
+												className="w-full cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: Historyc, alt: "EXCHRON_CNN Training / Validation Curves" })}
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -374,7 +416,8 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${m_data.width} / ${m_data.height}`,
 												}}
-												className="w-full"
+												className="w-full cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: m_data, alt: "EXCHRON_DNN Training / Validation Curves" })}
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -391,7 +434,30 @@ export default function OverviewTab() {
 												</div>
 											</figure>
 										)}
-										{!['exchron-cnn', 'exchron-dnn'].includes(model.id) && (
+										{model.id === 'exchron-gb' && (
+											<figure
+												style={{
+													aspectRatio: `${GB_output1.width} / ${GB_output1.height}`,
+												}}
+												className="w-full cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: GB_output1, alt: "EXCHRON_GB Training Progress" })}
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={GB_output1}
+														alt="EXCHRON_GB training progress"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 800px) 100vw, 480px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-2 py-0.5 rounded">
+														Training Progress
+													</span>
+												</div>
+											</figure>
+										)}
+										{!['exchron-cnn', 'exchron-dnn', 'exchron-gb'].includes(model.id) && (
 											<div className="rounded-md border border-[var(--input-border)] bg-[var(--placeholder-color)] h-[200px] flex items-center justify-center text-sm text-[var(--text-secondary)]">
 												Training / Validation Curves
 											</div>
@@ -411,7 +477,8 @@ export default function OverviewTab() {
 										<>
 											<figure
 												style={{ aspectRatio: `${roc.width} / ${roc.height}` }}
-												className="w-full"
+												className="w-full cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: roc, alt: "EXCHRON_CNN ROC Curve" })}
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -431,7 +498,8 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${CNN_confusionmatrix.width} / ${CNN_confusionmatrix.height}`,
 												}}
-												className="w-full"
+												className="w-full cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: CNN_confusionmatrix, alt: "EXCHRON_CNN Confusion Matrix" })}
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -455,7 +523,8 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${correlationMatrix.width} / ${correlationMatrix.height}`,
 												}}
-												className="w-full"
+												className="w-full cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: correlationMatrix, alt: "EXCHRON_DNN Correlation Matrix" })}
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -475,7 +544,8 @@ export default function OverviewTab() {
 												style={{
 													aspectRatio: `${D_conf_data.width} / ${D_conf_data.height}`,
 												}}
-												className="w-full"
+												className="w-full cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: D_conf_data, alt: "EXCHRON_DNN Confusion Matrix" })}
 											>
 												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
 													<Image
@@ -492,6 +562,29 @@ export default function OverviewTab() {
 												</div>
 											</figure>
 										</>
+									)}
+									{model.id === 'exchron-gb' && (
+										<div className="col-span-2 flex justify-center">
+											<figure
+												style={{ aspectRatio: `${GB_output3.width} / ${GB_output3.height}` }}
+												className="w-full max-w-md cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: GB_output3, alt: "EXCHRON_GB ROC Curve" })}
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={GB_output3}
+														alt="EXCHRON_GB ROC Curve"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 900px) 100vw, 420px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded">
+														ROC Curve
+													</span>
+												</div>
+											</figure>
+										</div>
 									)}
 								</div>
 								<div className="fixed bottom-8 right-8 z-20">
@@ -523,6 +616,34 @@ export default function OverviewTab() {
 						</div>
 					</CardContent>
 				</Card>
+			)}
+
+			{/* Image Modal */}
+			{modalImage && (
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+					onClick={handleModalClick}
+				>
+					<div className="relative max-w-[90vw] max-h-[90vh] p-4">
+						<div className="relative">
+							<Image
+								src={modalImage.src}
+								alt={modalImage.alt}
+								className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+								width={800}
+								height={600}
+								placeholder="blur"
+							/>
+							<button
+								onClick={() => setModalImage(null)}
+								className="absolute top-2 right-2 bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/80 transition-colors"
+								aria-label="Close modal"
+							>
+								×
+							</button>
+						</div>
+					</div>
+				</div>
 			)}
 		</div>
 	);

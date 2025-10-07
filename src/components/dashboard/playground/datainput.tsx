@@ -171,19 +171,17 @@ export default function DataInputTab() {
 
 
 	// Parameter definitions for manual data entry (SVM/GB models)
+	// KOI parameters matching the CSV template structure for GB/SVM models
 	const koiParameters = [
 		{ key: 'koi_period', label: 'Orbital Period', unit: 'days', min: 0.242, max: 129995.778, defaultValue: 10.0, step: 0.1, description: 'Time for planet to complete one orbit' },
 		{ key: 'koi_time0bk', label: 'Transit Epoch (BKJD)', unit: 'BKJD', min: 120.516, max: 1472.522, defaultValue: 170.0, step: 0.001, description: 'Time of first observed transit in Barycentric Kepler Julian Day' },
-		{ key: 'koi_time0', label: 'Transit Epoch (BJD)', unit: 'BJD', min: 2454953.516, max: 2456305.522, defaultValue: 2455000.0, step: 0.001, description: 'Time of first observed transit in Barycentric Julian Day' },
-		{ key: 'koi_eccen', label: 'Eccentricity', unit: '', min: 0.0, max: 1.0, defaultValue: 0.0, step: 0.001, description: 'Orbital eccentricity (0 = circular, <1 = elliptical)' },
 		{ key: 'koi_impact', label: 'Impact Parameter', unit: '', min: 0.0, max: 100.806, defaultValue: 0.5, step: 0.01, description: 'How centrally the planet transits the star' },
 		{ key: 'koi_duration', label: 'Transit Duration', unit: 'hours', min: 0.052, max: 138.540, defaultValue: 3.0, step: 0.01, description: 'Duration of the transit event' },
 		{ key: 'koi_depth', label: 'Transit Depth', unit: 'ppm', min: 0.0, max: 1541400.0, defaultValue: 100.0, step: 1.0, description: 'Depth of the transit in parts per million' },
-		{ key: 'koi_sma', label: 'Semi-Major Axis', unit: 'au', min: 0.006, max: 44.989, defaultValue: 0.1, step: 0.001, description: 'Semi-major axis of the planetary orbit' },
 		{ key: 'koi_incl', label: 'Inclination', unit: 'degrees', min: 2.290, max: 90.0, defaultValue: 89.0, step: 0.1, description: 'Orbital inclination angle' },
 		{ key: 'koi_model_snr', label: 'Signal-to-Noise Ratio', unit: '', min: 0.0, max: 9054.7, defaultValue: 50.0, step: 0.1, description: 'Transit signal-to-noise ratio' },
-		{ key: 'koi_count', label: 'Planet Count', unit: '', min: 1, max: 7, defaultValue: 1, step: 1, description: 'Number of planets in the system' },
-		{ key: 'koi_bin_oedp_sig', label: 'Odd-Even Depth Stat', unit: '', min: -1.0, max: 1.0, defaultValue: 0.0, step: 0.001, description: 'Odd-even depth comparison statistic' },
+		{ key: 'koi_count', label: 'Transit Count', unit: '', min: 1, max: 500, defaultValue: 50, step: 1, description: 'Number of observed transits' },
+		{ key: 'koi_bin_oedp_sig', label: 'Odd-Even Depth Significance', unit: '', min: -10.0, max: 10.0, defaultValue: 0.0, step: 0.001, description: 'Statistical significance of odd-even depth difference' },
 		{ key: 'koi_steff', label: 'Stellar Temperature', unit: 'K', min: 2661, max: 15896, defaultValue: 5778, step: 1, description: 'Effective temperature of the host star' },
 		{ key: 'koi_slogg', label: 'Stellar Surface Gravity', unit: 'log10(cm/s²)', min: 0.047, max: 5.364, defaultValue: 4.44, step: 0.01, description: 'Logarithm of stellar surface gravity' },
 		{ key: 'koi_srad', label: 'Stellar Radius', unit: 'R☉', min: 0.109, max: 229.908, defaultValue: 1.0, step: 0.01, description: 'Radius of the host star in solar radii' },
@@ -514,26 +512,6 @@ export default function DataInputTab() {
 
 						</CardContent>
 					</Card>
-					<Card>
-						<CardTitle>Data Pre-processing</CardTitle>
-						<CardContent>
-							<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-								<p className="leading-relaxed text-sm">
-									Our preprocessing pipeline standardizes temporal sampling,
-									removes stellar noise, and applies detrending to isolate
-									transit signatures. Outliers and missing values are handled
-									before inference for stability.
-								</p>
-								<div className="flex items-center justify-center">
-									<div className="bg-[var(--placeholder-color)] h-[240px] w-full rounded-lg border border-[var(--input-border)] flex items-center justify-center">
-										<span className="text-[var(--text-secondary)] text-sm">
-											Pre-processing Flow
-										</span>
-									</div>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
 				</>
 			)}
 
@@ -582,31 +560,30 @@ export default function DataInputTab() {
 							<CardTitle>Data Upload Guide</CardTitle>
 							<CardContent>
 								<p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">
-									Prepare a CSV file with a header row:{' '}
+									Prepare a CSV file with Kepler Object of Interest (KOI) data columns including{' '}
 									<code className="px-1 py-0.5 bg-[var(--input-background)] rounded text-[11px]">
-										Parameter,Value
+										kepid, koi_disposition, koi_period, koi_depth
 									</code>
-									. Values outside the 0–100 range will be flagged. Download the
-									template below for reference.
+									{' '}and other astronomical parameters. Each row represents one exoplanet candidate. Download the
+									template below for the complete format and example data.
 								</p>
 								<button
 									type="button"
 									onClick={() => {
-										const csvContent =
-											'Parameter,Value\nParameter 1,50\nParameter 2,60';
+										const csvContent = 'kepid,koi_disposition,koi_period,koi_time0bk,koi_impact,koi_duration,koi_depth,koi_incl,koi_model_snr,koi_count,koi_bin_oedp_sig,koi_steff,koi_slogg,koi_srad,koi_smass,koi_kepmag\n10904857,CANDIDATE,3.522,131.512,0.146,2.957,4668.8,89.18,25.1,48,0.002,5455,4.467,0.927,0.81,15.347\n10905746,FALSE POSITIVE,4.226,132.044,0.89,3.12,1864.3,87.85,18.6,42,-0.012,6015,4.44,1.132,1.021,14.876';
 										const blob = new Blob([csvContent], {
 											type: 'text/csv;charset=utf-8;',
 										});
 										const url = URL.createObjectURL(blob);
 										const a = document.createElement('a');
 										a.href = url;
-										a.download = 'data-template.csv';
+										a.download = 'kepler-data-template.csv';
 										a.click();
 										URL.revokeObjectURL(url);
 									}}
 									className="px-4 py-2 rounded-md border border-black bg-black text-white text-sm font-medium hover:opacity-90"
 								>
-									Download Template (data-template.csv)
+									Download Template (kepler-data-template.csv)
 								</button>
 							</CardContent>
 						</Card>
@@ -750,27 +727,6 @@ export default function DataInputTab() {
 							</CardContent>
 						</Card>
 					</div>
-					<Card>
-						<CardTitle>Data Pre-processing</CardTitle>
-						<CardContent>
-							<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-								<p className="leading-relaxed text-sm">
-									Once uploaded, your CSV is parsed and validated. Columns are
-									coerced into numeric ranges, missing values are imputed
-									(median strategy), and outliers beyond configurable sigma
-									thresholds are flagged. Normalized representations are cached
-									for rapid inference.
-								</p>
-								<div className="flex items-center justify-center">
-									<div className="bg-[var(--placeholder-color)] h-[240px] w-full rounded-lg border border-[var(--input-border)] flex items-center justify-center">
-										<span className="text-[var(--text-secondary)] text-sm">
-											Processing Overview
-										</span>
-									</div>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
 				</div>
 			)}
 
