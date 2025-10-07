@@ -57,20 +57,16 @@ export default function TabNavigation({ activeTab, mode }: TabNavigationProps) {
 			name: 'Train & Validate',
 			href: '/dashboard/classroom/train-validate',
 		},
+		{
+			id: 'test-export',
+			number: '04',
+			name: 'Test & Export',
+			href: '/dashboard/classroom/test-export',
+		},
 	];
 
-	const hasTestTab = !!classroomState.testExport.hasTestResults;
-	const classroomTabs = hasTestTab
-		? [
-				...classroomTabsBase,
-				{
-					id: 'test-export',
-					number: '04',
-					name: 'Test and Export',
-					href: '/dashboard/classroom/test-export',
-				},
-		  ]
-		: classroomTabsBase;
+	// Always show all tabs in classroom mode
+	const classroomTabs = classroomTabsBase;
 
 	// Use state to prevent flickering during mode changes
 	const [currentTabs, setCurrentTabs] = useState(playgroundTabs);

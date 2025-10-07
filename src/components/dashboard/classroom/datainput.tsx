@@ -48,6 +48,18 @@ export default function ClassroomDataInputTab() {
 		normalization,
 	} = classroomState.dataInput;
 
+	// Initialize localStorage for global status display
+	useEffect(() => {
+		const displayNames: Record<string, string> = {
+			kepler: 'Kepler Database',
+			tess: 'TESS Database', 
+			own: 'Custom Upload'
+		};
+		if (selectedDataSource) {
+			localStorage.setItem('selectedDataInput', displayNames[selectedDataSource] || selectedDataSource);
+		}
+	}, [selectedDataSource]);
+
 	// IMPLEMENTATION UPDATE: Enhanced CSV parsing with validation and store integration
 	const parseCSV = async (
 		csvContent: string,
@@ -314,6 +326,17 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 		setParseError(null);
 		setShowUploadPopup(false);
 		classroomStore.setDataSource(source as any); // effect will load
+		
+		// Save to localStorage for global status display
+		const displayNames: Record<string, string> = {
+			kepler: 'Kepler Database',
+			tess: 'TESS Database', 
+			own: 'Custom Upload'
+		};
+		localStorage.setItem('selectedDataInput', displayNames[source] || source);
+		// Dispatch custom event for same-tab updates
+		window.dispatchEvent(new Event('localStorageChange'));
+		
 		if (source === 'own') {
 			// For own data we just open popup; parsing occurs on upload
 			setShowUploadPopup(true);
@@ -476,47 +499,7 @@ KEPLER-116.01,2.8,0.5,4890.0,4.62,FALSE_POSITIVE`;
 	};
 
 	return (
-		<div className="grid grid-cols-1 gap-6 relative">
-			{/* Workflow Navigation */}
-			<div className="flex items-center justify-center w-full mb-2">
-				<div className="flex items-center space-x-2 md:space-x-4 bg-white px-6 py-3 rounded-xl shadow-sm">
-					{/* Data Input - Active */}
-					<div className="flex items-center">
-						<div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center">
-							<span className="text-sm font-bold">1</span>
-						</div>
-						<span className="ml-2 text-sm font-medium">Data Input</span>
-					</div>
-
-					{/* Connector Line */}
-					<div className="w-8 h-0.5 bg-[#E6E7E9]"></div>
-
-					{/* Model Selection - Upcoming */}
-					<div className="flex items-center">
-						<div className="w-8 h-8 rounded-full bg-[#E6E7E9] text-gray-500 flex items-center justify-center">
-							<span className="text-sm font-bold">2</span>
-						</div>
-						<span className="ml-2 text-sm font-medium text-gray-500">
-							Model Selection
-						</span>
-					</div>
-
-					{/* Connector Line */}
-					<div className="w-8 h-0.5 bg-[#E6E7E9]"></div>
-
-					{/* Train & Validate - Upcoming (now final step) */}
-					<div className="flex items-center">
-						<div className="w-8 h-8 rounded-full bg-[#E6E7E9] text-gray-500 flex items-center justify-center">
-							<span className="text-sm font-bold">3</span>
-						</div>
-						<span className="ml-2 text-sm font-medium text-gray-500">
-							Train & Validate
-						</span>
-					</div>
-				</div>
-			</div>
-
-			<div className="grid grid-cols-1 gap-4">
+		<div className="grid grid-cols-1 gap-6 relative">			<div className="grid grid-cols-1 gap-4">
 				{/* Data Source Card (expanded width) */}
 				<Card className="w-full">
 					<CardTitle className="flex items-center justify-between">

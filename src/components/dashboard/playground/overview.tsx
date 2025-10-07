@@ -109,20 +109,126 @@ const MODELS: PlaygroundModel[] = [
 			{ label: 'AUC', model: 0.939, baseline: 0.947 },
 		],
 	},
+	{
+		id: 'exchron-gb',
+		short: 'EXCHRON-GB',
+		description: [
+			'EXCHRON_GB is a gradient boosting ensemble model specifically optimized for exoplanet classification using engineered astronomical features. The model leverages the power of sequential tree-based learning, where each new tree corrects the errors of previous iterations, creating a robust ensemble that excels at capturing complex non-linear relationships in stellar data. By utilizing features such as stellar parameters, orbital characteristics, and statistical properties derived from light curves, EXCHRON_GB can effectively distinguish between true planetary signals and false positives caused by eclipsing binaries or instrumental artifacts.',
+			'The gradient boosting framework provides exceptional interpretability through feature importance rankings, allowing astronomers to understand which stellar properties are most predictive of planetary candidates. With carefully tuned hyperparameters including learning rate, tree depth, and regularization terms, the model achieves strong generalization while maintaining computational efficiency. This makes EXCHRON_GB particularly valuable for large-scale surveys where quick and reliable classification of thousands of candidates is essential, providing both high accuracy and meaningful insights into the underlying physics of planetary detection.',
+		],
+		architecturePlaceholders: [
+			{ label: 'EXCHRON_GB Architecture' },
+			{ label: 'Feature Importance' },
+		],
+		metrics: [
+			{ label: 'Accuracy', value: 0.942 },
+			{ label: 'Recall', value: 0.925 },
+			{ label: 'Precision', value: 0.938 },
+			{ label: 'F1 Score', value: 0.931 },
+			{ label: 'AUC', value: 0.965 },
+			{ label: 'Latency (ms)', value: 3.2, higherIsBetter: false },
+		],
+		parameters: {
+			'Learning Rate': '0.1',
+			'Max Depth': 6,
+			'N Estimators': 150,
+			'Subsample': '0.8',
+			'Min Samples Split': 20,
+			'Min Samples Leaf': 5,
+		},
+		comparisonBaseline: 'EXCHRON_SVM',
+		comparisonMetrics: [
+			{ label: 'Accuracy', model: 0.942, baseline: 0.916 },
+			{ label: 'Recall', model: 0.925, baseline: 0.898 },
+			{ label: 'Precision', model: 0.938, baseline: 0.921 },
+			{ label: 'F1', model: 0.931, baseline: 0.909 },
+			{ label: 'AUC', model: 0.965, baseline: 0.952 },
+		],
+	},
+	{
+		id: 'exchron-svm',
+		short: 'EXCHRON-SVM',
+		description: [
+			'EXCHRON_SVM is a support vector machine model designed for robust exoplanet classification through optimal hyperplane separation in high-dimensional feature space. The model employs a radial basis function (RBF) kernel to capture complex non-linear decision boundaries between confirmed exoplanets and false positive detections. By mapping input features into a higher-dimensional space, the SVM can effectively separate classes that are not linearly separable in the original feature space, making it particularly effective for distinguishing subtle differences in stellar and orbital parameters.',
+			'The model incorporates careful feature scaling and regularization through the C parameter to balance between maximizing the margin and minimizing classification errors. Class imbalance is handled through weighted training, ensuring that minority class samples (true planets) receive appropriate attention during optimization. With its strong theoretical foundation and excellent generalization properties, EXCHRON_SVM provides reliable classification performance even with limited training data, making it a valuable complement to ensemble methods for critical decision-making in exoplanet validation pipelines.',
+		],
+		architecturePlaceholders: [
+			{ label: 'EXCHRON_SVM Architecture' },
+			{ label: 'Decision Boundary' },
+		],
+		metrics: [
+			{ label: 'Accuracy', value: 0.916 },
+			{ label: 'Recall', value: 0.898 },
+			{ label: 'Precision', value: 0.921 },
+			{ label: 'F1 Score', value: 0.909 },
+			{ label: 'AUC', value: 0.952 },
+			{ label: 'Latency (ms)', value: 5.7, higherIsBetter: false },
+		],
+		parameters: {
+			'Kernel': 'RBF',
+			'C Parameter': '10.0',
+			'Gamma': '0.001',
+			'Class Weight': 'balanced',
+			'Max Iterations': 1000,
+			'Tolerance': '1e-4',
+		},
+		comparisonBaseline: 'EXCHRON_GB',
+		comparisonMetrics: [
+			{ label: 'Accuracy', model: 0.916, baseline: 0.942 },
+			{ label: 'Recall', model: 0.898, baseline: 0.925 },
+			{ label: 'Precision', model: 0.921, baseline: 0.938 },
+			{ label: 'F1', model: 0.909, baseline: 0.931 },
+			{ label: 'AUC', model: 0.952, baseline: 0.965 },
+		],
+	},
 ];
 
 const numberFormat = (v: number) => (v < 1 ? v.toFixed(4) : v.toFixed(2));
 
 export default function OverviewTab() {
 	const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+	
+	// Load initial model selection from localStorage
+	React.useEffect(() => {
+		const savedModel = localStorage.getItem('selectedModel');
+		if (savedModel) {
+			try {
+				const parsed = JSON.parse(savedModel);
+				setSelectedModelId(parsed.id);
+			} catch (e) {
+				// Ignore parsing errors
+			}
+		}
+	}, []);
+	
 	// Lightbox functionality removed per revert request; images now static.
 	const model = useMemo(
 		() =>
 			selectedModelId ? MODELS.find((m) => m.id === selectedModelId) : null,
 		[selectedModelId],
 	);
-	const handleModelSelect = (id: string) =>
-		setSelectedModelId((prev) => (prev === id ? null : id));
+	const handleModelSelect = (id: string) => {
+		const newSelectedId = selectedModelId === id ? null : id;
+		setSelectedModelId(newSelectedId);
+		
+		// Save to localStorage for global status display
+		if (newSelectedId) {
+			const selectedModel = MODELS.find((m) => m.id === newSelectedId);
+			if (selectedModel) {
+				localStorage.setItem('selectedModel', JSON.stringify({
+					id: selectedModel.id,
+					name: selectedModel.short,
+					short: selectedModel.short
+				}));
+				// Dispatch custom event for same-tab updates
+				window.dispatchEvent(new Event('localStorageChange'));
+			}
+		} else {
+			localStorage.removeItem('selectedModel');
+			// Dispatch custom event for same-tab updates
+			window.dispatchEvent(new Event('localStorageChange'));
+		}
+	};
 
 	return (
 		<div className="w-full">

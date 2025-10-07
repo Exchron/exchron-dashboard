@@ -839,37 +839,6 @@ export default function ClassroomTestExportTab() {
 		);
 	};
 
-	// Workflow step (restored)
-	const WorkflowStep: React.FC<{
-		step: number;
-		isActive: boolean;
-		isCompleted: boolean;
-		label: string;
-	}> = ({ step, isActive, isCompleted, label }) => (
-		<div className="flex items-center">
-			<div
-				className={`w-8 h-8 rounded-full flex items-center justify-center ${
-					isActive || isCompleted
-						? 'bg-black text-white'
-						: 'bg-[#E6E7E9] text-gray-500'
-				}`}
-			>
-				{isCompleted ? (
-					<CheckmarkIcon />
-				) : (
-					<span className="text-sm font-bold">{step}</span>
-				)}
-			</div>
-			<span
-				className={`ml-2 text-sm font-medium ${
-					isActive ? '' : 'text-gray-500'
-				}`}
-			>
-				{label}
-			</span>
-		</div>
-	);
-
 	// Export button (restored)
 	const ExportButton: React.FC<{
 		onClick?: () => void;
@@ -887,41 +856,7 @@ export default function ClassroomTestExportTab() {
 	);
 
 	return (
-		<div>
-			{/* Workflow Navigation */}
-			<div className="flex items-center justify-center w-full mb-2">
-				<div className="flex items-center space-x-2 md:space-x-4 bg-white px-6 py-3 rounded-xl shadow-sm">
-					<WorkflowStep
-						step={1}
-						isActive={false}
-						isCompleted={true}
-						label="Data Input"
-					/>
-					<div className="w-8 h-0.5 bg-black"></div>
-					<WorkflowStep
-						step={2}
-						isActive={false}
-						isCompleted={true}
-						label="Model Selection"
-					/>
-					<div className="w-8 h-0.5 bg-black"></div>
-					<WorkflowStep
-						step={3}
-						isActive={false}
-						isCompleted={true}
-						label="Train & Validate"
-					/>
-					<div className="w-8 h-0.5 bg-black"></div>
-					<WorkflowStep
-						step={4}
-						isActive={true}
-						isCompleted={false}
-						label="Test & Export"
-					/>
-				</div>
-			</div>
-
-			{/* Test Model and Export Buttons - Only show if model is trained */}
+		<div>			{/* Test Model and Export Buttons - Only show if model is trained */}
 			{trained && (
 				<div className="mb-4">
 					<div className="flex justify-center gap-4">

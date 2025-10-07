@@ -35,6 +35,18 @@ export default function ClassroomModelSelectionTab() {
 	];
 
 	const [selectedModel, setSelectedModel] = useState<string>('neural-network');
+	
+	// Initialize localStorage for global status display
+	useEffect(() => {
+		const modelData = modelOptions.find(m => m.id === selectedModel);
+		if (modelData) {
+			localStorage.setItem('selectedModel', JSON.stringify({
+				id: modelData.id,
+				name: modelData.name,
+				short: modelData.name
+			}));
+		}
+	}, [selectedModel]);
 	// Store all hyperparameter inputs as strings to allow intermediary (empty / partial) edits without producing NaN warnings
 	const [nnParams, setNnParams] = useState({
 		hiddenLayers: '128,64,32',
@@ -119,58 +131,7 @@ export default function ClassroomModelSelectionTab() {
 	}, [nnParams, rfParams, selectedModel]);
 
 	return (
-		<div className="grid grid-cols-1 gap-6">
-			{/* Workflow Navigation */}
-			<div className="flex items-center justify-center w-full mb-2">
-				<div className="flex items-center space-x-2 md:space-x-4 bg-white px-6 py-3 rounded-xl shadow-sm">
-					{/* Data Input - Completed */}
-					<div className="flex items-center">
-						<div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								className="w-5 h-5"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-							>
-								<path
-									fillRule="evenodd"
-									d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-									clipRule="evenodd"
-								/>
-							</svg>
-						</div>
-						<span className="ml-2 text-sm font-medium text-gray-500">
-							Data Input
-						</span>
-					</div>
-
-					{/* Connector Line */}
-					<div className="w-8 h-0.5 bg-black"></div>
-
-					{/* Model Selection - Active */}
-					<div className="flex items-center">
-						<div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center">
-							<span className="text-sm font-bold">2</span>
-						</div>
-						<span className="ml-2 text-sm font-medium">Model Selection</span>
-					</div>
-
-					{/* Connector Line */}
-					<div className="w-8 h-0.5 bg-[#E6E7E9]"></div>
-
-					{/* Train & Validate - Upcoming (final step) */}
-					<div className="flex items-center">
-						<div className="w-8 h-8 rounded-full bg-[#E6E7E9] text-gray-500 flex items-center justify-center">
-							<span className="text-sm font-bold">3</span>
-						</div>
-						<span className="ml-2 text-sm font-medium text-gray-500">
-							Train & Validate
-						</span>
-					</div>
-				</div>
-			</div>
-
-			<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+		<div className="grid grid-cols-1 gap-6">			<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 				{/* Model Selection (Left) */}
 				<div className="lg:col-span-4">
 					<Card>
@@ -197,9 +158,17 @@ export default function ClassroomModelSelectionTab() {
 													name="model"
 													value={m.id}
 													checked={selected}
-													onChange={() =>
-														!m.comingSoon && setSelectedModel(m.id)
-													}
+													onChange={() => {
+														if (!m.comingSoon) {
+															setSelectedModel(m.id);
+															// Save to localStorage for global status display
+															localStorage.setItem('selectedModel', JSON.stringify({
+																id: m.id,
+																name: m.name,
+																short: m.name
+															}));
+														}
+													}}
 													className="mt-1 mr-3"
 													disabled={m.comingSoon}
 												/>

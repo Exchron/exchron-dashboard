@@ -69,6 +69,8 @@ export default function DataInputTab() {
 		if (mode === viewMode) {
 			setViewMode(null);
 			localStorage.removeItem('selectedDataInput');
+			// Dispatch custom event for same-tab updates
+			window.dispatchEvent(new Event('localStorageChange'));
 		} else {
 			setViewMode(mode);
 			const display: Record<ViewMode, string> = {
@@ -78,6 +80,8 @@ export default function DataInputTab() {
 				batch: 'Batch Processing',
 			};
 			localStorage.setItem('selectedDataInput', display[mode]);
+			// Dispatch custom event for same-tab updates
+			window.dispatchEvent(new Event('localStorageChange'));
 		}
 	};
 
@@ -87,7 +91,17 @@ export default function DataInputTab() {
 	React.useEffect(() => {
 		const stored = localStorage.getItem('selectedModel');
 		setSelectedModel(stored);
-		if (stored) setIsRestrictedModel(stored.toLowerCase().includes('cnn'));
+		if (stored) {
+			try {
+				const parsed = JSON.parse(stored);
+				const modelId = parsed.id || stored;
+				// CNN and DNN models are restricted
+				setIsRestrictedModel(modelId.includes('cnn') || modelId.includes('dnn'));
+			} catch {
+				// Fallback for legacy string format
+				setIsRestrictedModel(stored.toLowerCase().includes('cnn') || stored.toLowerCase().includes('dnn'));
+			}
+		}
 	}, []);
 
 	// Single dataset selection (unrestricted preloaded)
@@ -112,100 +126,40 @@ export default function DataInputTab() {
 		}
 	}, [isRestrictedModel, viewMode]);
 
-	// Slider + direct parameter config
-	const sliderConfigs: SliderConfig[] = React.useMemo(
-		() =>
-			Array.from({ length: 14 }).map((_, i) => ({
-				id: `param-${i + 1}`,
-				label: `Parameter ${i + 1}`,
-				min: 0,
-				max: 100,
-				step: 1,
-				defaultValue: 50,
-			})),
-		[],
-	);
-	const directInputConfigs: SliderConfig[] = React.useMemo(
-		() =>
-			Array.from({ length: 14 }).map((_, i) => ({
-				id: `param-${15 + i}`,
-				label: `Parameter ${15 + i}`,
-				min: 0,
-				max: 100,
-				step: 1,
-				defaultValue: 50,
-			})),
-		[],
-	);
-	const [sliderValues, setSliderValues] = React.useState<number[]>(() =>
-		sliderConfigs.map((s) => s.defaultValue),
-	);
-	const [directValues, setDirectValues] = React.useState<number[]>(() =>
-		directInputConfigs.map((d) => d.defaultValue),
-	);
-	const [activeDragIndex, setActiveDragIndex] = React.useState<number | null>(
-		null,
-	);
-	const [isDragging, setIsDragging] = React.useState(false);
 
-	const calcPct = (
-		e: React.MouseEvent<HTMLDivElement> | MouseEvent,
-		rect: DOMRect,
-	) => {
-		const offsetY = (e as MouseEvent).clientY - rect.top;
-		const pct = 100 - Math.min(Math.max((offsetY / rect.height) * 100, 0), 100);
-		return Math.round(pct);
-	};
-	const handleSliderMouseDown = (
-		index: number,
-		e: React.MouseEvent<HTMLDivElement>,
-	) => {
-		e.preventDefault();
-		setActiveDragIndex(index);
-		const rect = e.currentTarget.getBoundingClientRect();
-		const pct = calcPct(e, rect);
-		const cfg = sliderConfigs[index];
-		const value = Math.round(cfg.min + ((cfg.max - cfg.min) * pct) / 100);
-		setSliderValues((vals) => vals.map((v, i) => (i === index ? value : v)));
-		setIsDragging(true);
-	};
-	React.useEffect(() => {
-		if (!isDragging) return;
-		const move = (e: MouseEvent) => {
-			setSliderValues((vals) => {
-				if (activeDragIndex === null) return vals;
-				const el = document.querySelectorAll('.slider-container')[
-					activeDragIndex
-				] as HTMLDivElement | undefined;
-				if (!el) return vals;
-				const rect = el.getBoundingClientRect();
-				const pct = calcPct(e, rect);
-				const cfg = sliderConfigs[activeDragIndex];
-				const value = Math.round(cfg.min + ((cfg.max - cfg.min) * pct) / 100);
-				return vals.map((v, i) => (i === activeDragIndex ? value : v));
-			});
-		};
-		const up = () => {
-			setIsDragging(false);
-			setActiveDragIndex(null);
-		};
-		window.addEventListener('mousemove', move);
-		window.addEventListener('mouseup', up);
-		return () => {
-			window.removeEventListener('mousemove', move);
-			window.removeEventListener('mouseup', up);
-		};
-	}, [isDragging, activeDragIndex, sliderConfigs]);
-	const handleSliderInputChange = (
-		index: number,
-		e: React.ChangeEvent<HTMLInputElement>,
-	) => {
-		let num = Number(e.target.value);
-		if (isNaN(num)) return;
-		const { min, max } = sliderConfigs[index];
-		if (num < min) num = min;
-		if (num > max) num = max;
-		setSliderValues((vals) => vals.map((v, i) => (i === index ? num : v)));
+
+	// Parameter definitions for manual data entry (SVM/GB models)
+	const koiParameters = [
+		{ key: 'koi_period', label: 'Orbital Period', unit: 'days', min: 0.242, max: 129995.778, defaultValue: 10.0, step: 0.1, description: 'Time for planet to complete one orbit' },
+		{ key: 'koi_time0bk', label: 'Transit Epoch (BKJD)', unit: 'BKJD', min: 120.516, max: 1472.522, defaultValue: 170.0, step: 0.001, description: 'Time of first observed transit in Barycentric Kepler Julian Day' },
+		{ key: 'koi_time0', label: 'Transit Epoch (BJD)', unit: 'BJD', min: 2454953.516, max: 2456305.522, defaultValue: 2455000.0, step: 0.001, description: 'Time of first observed transit in Barycentric Julian Day' },
+		{ key: 'koi_eccen', label: 'Eccentricity', unit: '', min: 0.0, max: 1.0, defaultValue: 0.0, step: 0.001, description: 'Orbital eccentricity (0 = circular, <1 = elliptical)' },
+		{ key: 'koi_impact', label: 'Impact Parameter', unit: '', min: 0.0, max: 100.806, defaultValue: 0.5, step: 0.01, description: 'How centrally the planet transits the star' },
+		{ key: 'koi_duration', label: 'Transit Duration', unit: 'hours', min: 0.052, max: 138.540, defaultValue: 3.0, step: 0.01, description: 'Duration of the transit event' },
+		{ key: 'koi_depth', label: 'Transit Depth', unit: 'ppm', min: 0.0, max: 1541400.0, defaultValue: 100.0, step: 1.0, description: 'Depth of the transit in parts per million' },
+		{ key: 'koi_sma', label: 'Semi-Major Axis', unit: 'au', min: 0.006, max: 44.989, defaultValue: 0.1, step: 0.001, description: 'Semi-major axis of the planetary orbit' },
+		{ key: 'koi_incl', label: 'Inclination', unit: 'degrees', min: 2.290, max: 90.0, defaultValue: 89.0, step: 0.1, description: 'Orbital inclination angle' },
+		{ key: 'koi_model_snr', label: 'Signal-to-Noise Ratio', unit: '', min: 0.0, max: 9054.7, defaultValue: 50.0, step: 0.1, description: 'Transit signal-to-noise ratio' },
+		{ key: 'koi_count', label: 'Planet Count', unit: '', min: 1, max: 7, defaultValue: 1, step: 1, description: 'Number of planets in the system' },
+		{ key: 'koi_bin_oedp_sig', label: 'Odd-Even Depth Stat', unit: '', min: -1.0, max: 1.0, defaultValue: 0.0, step: 0.001, description: 'Odd-even depth comparison statistic' },
+		{ key: 'koi_steff', label: 'Stellar Temperature', unit: 'K', min: 2661, max: 15896, defaultValue: 5778, step: 1, description: 'Effective temperature of the host star' },
+		{ key: 'koi_slogg', label: 'Stellar Surface Gravity', unit: 'log10(cm/s²)', min: 0.047, max: 5.364, defaultValue: 4.44, step: 0.01, description: 'Logarithm of stellar surface gravity' },
+		{ key: 'koi_srad', label: 'Stellar Radius', unit: 'R☉', min: 0.109, max: 229.908, defaultValue: 1.0, step: 0.01, description: 'Radius of the host star in solar radii' },
+		{ key: 'koi_smass', label: 'Stellar Mass', unit: 'M☉', min: 0.0, max: 3.735, defaultValue: 1.0, step: 0.01, description: 'Mass of the host star in solar masses' },
+		{ key: 'koi_kepmag', label: 'Kepler Magnitude', unit: 'mag', min: 6.966, max: 20.003, defaultValue: 12.0, step: 0.01, description: 'Apparent magnitude in Kepler bandpass' }
+	];
+
+	// State for KOI parameter values
+	const [koiValues, setKoiValues] = React.useState<Record<string, number>>(() => {
+		const initial: Record<string, number> = {};
+		koiParameters.forEach(param => {
+			initial[param.key] = param.defaultValue;
+		});
+		return initial;
+	});
+
+	const handleKoiValueChange = (key: string, value: number) => {
+		setKoiValues(prev => ({ ...prev, [key]: value }));
 	};
 
 	// Upload state
@@ -230,79 +184,71 @@ export default function DataInputTab() {
 		if (!file) return;
 		resetUploadStatus();
 		const err = validateFile(file);
-		if (err) {
-			setSelectedFile(null);
-			setUploadStatus({ stage: 'error', message: err });
-			return;
-		}
-		setSelectedFile(file);
-	};
-	const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-		handleFileSelection(e.target.files?.[0] || null);
-	const handleUploadTrigger = () => fileInputRef.current?.click();
-	const simulateUpload = () => {
-		if (!selectedFile) return;
-		setUploadStatus({ stage: 'validating', message: 'Validating file...' });
-		setTimeout(() => {
-			setUploadStatus({ stage: 'uploading', message: 'Uploading data...' });
-			setTimeout(
-				() =>
-					setUploadStatus({
-						stage: 'success',
-						message: 'File uploaded and validated successfully.',
-					}),
-				1200,
-			);
-		}, 800);
-	};
-	const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-		e.preventDefault();
-		e.dataTransfer.dropEffect = 'copy';
-		dropRef.current?.classList.add('ring-2', 'ring-black/40');
-	};
-	const handleDragLeave = () => {
-		dropRef.current?.classList.remove('ring-2', 'ring-black/40');
-	};
-	const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-		e.preventDefault();
-		dropRef.current?.classList.remove('ring-2', 'ring-black/40');
-		handleFileSelection(e.dataTransfer.files?.[0] || null);
-	};
+			if (err) {
+				setSelectedFile(null);
+				setUploadStatus({ stage: 'error', message: err });
+				return;
+			}
+			setSelectedFile(file);
+		};
+		const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+			const newFile = e.target.files?.[0] || null;
+			handleFileSelection(newFile);
+		};
+		const handleUploadTrigger = () => fileInputRef.current?.click();
+		const simulateUpload = () => {
+			if (!selectedFile) return;
+			setUploadStatus({ stage: 'validating', message: 'Validating file...' });
+			setTimeout(() => {
+				setUploadStatus({ stage: 'uploading', message: 'Uploading data...' });
+				setTimeout(
+					() =>
+						setUploadStatus({
+							stage: 'success',
+							message: 'File uploaded and validated successfully.',
+						}),
+					1200,
+				);
+			}, 800);
+		};
+		const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+			e.preventDefault();
+			e.dataTransfer.dropEffect = 'copy';
+			dropRef.current?.classList.add('ring-2', 'ring-black/40');
+		};
+		const handleDragLeave = () => {
+			dropRef.current?.classList.remove('ring-2', 'ring-black/40');
+		};
+		const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+			e.preventDefault();
+			dropRef.current?.classList.remove('ring-2', 'ring-black/40');
+			handleFileSelection(e.dataTransfer.files?.[0] || null);
+		};
 
-	// Builders for payload meta
-	const buildManual = () =>
-		sliderConfigs.map((cfg, i) => ({
-			id: cfg.id,
-			label: cfg.label,
-			value: sliderValues[i],
-			min: cfg.min,
-			max: cfg.max,
-			type: 'slider',
-		}));
-	const buildDirect = () =>
-		directInputConfigs.map((cfg, i) => ({
-			id: cfg.id,
-			label: cfg.label,
-			value: directValues[i],
-			min: cfg.min,
-			max: cfg.max,
-			type: 'direct',
-		}));
-	const buildUpload = () =>
-		selectedFile
-			? {
-					filename: selectedFile.name,
-					size: selectedFile.size,
-					status: uploadStatus.stage,
-			  }
-			: null;
-	const buildPreloaded = () => {
-		if (isRestrictedModel)
-			return selectedRecordId ? [{ recordId: selectedRecordId }] : [];
-		return selectedDataset ? [{ datasetId: selectedDataset }] : [];
-	};
-
-	// Determine if input selection is complete for enabling Evaluate
+		// Builders for payload meta
+		const buildManual = () =>
+			koiParameters.map((param) => ({
+				id: param.key,
+				label: param.label,
+				value: koiValues[param.key] || param.defaultValue,
+				min: param.min,
+				max: param.max,
+				type: 'koi-parameter',
+				unit: param.unit,
+			}));
+		const buildUpload = () =>
+			selectedFile
+				? {
+						filename: selectedFile.name,
+						size: selectedFile.size,
+						status: uploadStatus.stage,
+				  }
+				: null;
+		const buildPreloaded = () => {
+			if (isRestrictedModel)
+				return selectedRecordId ? [{ recordId: selectedRecordId }] : [];
+			return selectedDataset ? [{ datasetId: selectedDataset }] : [];
+		};	// Determine if input selection is complete for enabling Evaluate
 	const isReady = React.useMemo(() => {
 		if (!viewMode) return false;
 		if (viewMode === 'manual') return true; // manual always ready once selected
@@ -327,17 +273,17 @@ export default function DataInputTab() {
 		router.push('/dashboard/playground/results');
 	};
 
-	const datasetCards = [
+	const allDatasetCards = [
 		{
 			id: 'kepler-validated',
-			name: 'Kepler Validated Transits',
+			name: 'Kepler Objects of Interest Test Data',
 			description: 'High-confidence transit events from Kepler mission',
 			samples: 4892,
 			duration: '2009-2017',
 		},
 		{
 			id: 'tess-candidates',
-			name: 'TESS Planet Candidates',
+			name: 'TESS Objects of Interest Test Data',
 			description: 'Recent candidates identified by TESS survey',
 			samples: 2674,
 			duration: '2018-2024',
@@ -358,6 +304,17 @@ export default function DataInputTab() {
 			duration: 'Combined',
 		},
 	];
+
+	// Filter datasets based on model type
+	const datasetCards = React.useMemo(() => {
+		if (isRestrictedModel) {
+			// CNN/DNN models only show Kepler data
+			return allDatasetCards.filter(card => card.id === 'kepler-validated');
+		} else {
+			// SVM/GB models show Kepler and TESS data
+			return allDatasetCards.filter(card => ['kepler-validated', 'tess-candidates'].includes(card.id));
+		}
+	}, [isRestrictedModel]);
 
 	return (
 		<div className="space-y-4">
@@ -441,88 +398,78 @@ export default function DataInputTab() {
 					<Card>
 						<CardTitle>Manual Data Entry</CardTitle>
 						<CardContent>
-							<p className="text-sm text-[var(--text-secondary)] mb-4 max-w-3xl">
-								Adjust parameters using the original slider layout or use the
-								direct value inputs below. Both stay synced.
+							<p className="text-sm text-[var(--text-secondary)] mb-6 max-w-3xl">
+								Enter values for each exoplanet detection parameter. These correspond to standard astronomical measurements used by the model for classification.
 							</p>
-							<div className="flex flex-wrap gap-4">
-								{sliderConfigs.map((cfg, i) => {
-									const value = sliderValues[i];
-									const pct =
-										((value - cfg.min) / (cfg.max - cfg.min || 1)) * 100;
+							
+							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+								{koiParameters.map((param) => {
+									const currentValue = koiValues[param.key] || param.defaultValue;
 									return (
-										<div
-											key={cfg.id}
-											className="flex flex-col items-center w-20"
-										>
-											<span className="text-[11px] font-medium mb-2 text-center leading-tight">
-												{cfg.label}
-											</span>
-											<div
-												className="relative w-4 h-[150px] bg-[var(--placeholder-color)] rounded-md vertical-slider cursor-pointer slider-container"
-												onMouseDown={(e) => handleSliderMouseDown(i, e)}
-												role="slider"
-												aria-valuemin={cfg.min}
-												aria-valuemax={cfg.max}
-												aria-valuenow={value}
-												aria-label={cfg.label}
-											>
-												<div
-													className="absolute bottom-0 w-4 bg-white rounded-md border border-[var(--input-border)]"
-													style={{ height: `${pct}%` }}
-												/>
-												<div
-													className="absolute left-1/2 -translate-x-1/2 w-5 h-5 bg-white rounded border border-[var(--input-border)] shadow-sm"
-													style={{ bottom: `${pct}%`, marginBottom: '-10px' }}
-												/>
+										<div key={param.key} className="bg-white border border-[var(--input-border)] rounded-lg p-4">
+											<div className="mb-3">
+												<label className="block text-sm font-semibold text-black mb-1">
+													{param.label} {param.unit && `(${param.unit})`}
+												</label>
+												<p className="text-xs text-[var(--text-secondary)] leading-tight">
+													{param.description}
+												</p>
 											</div>
-											<input
-												type="number"
-												className="mt-3 w-full text-center text-xs rounded border border-[#AFAFAF] bg-white h-7"
-												value={value}
-												min={cfg.min}
-												max={cfg.max}
-												onChange={(e) => handleSliderInputChange(i, e)}
-											/>
-											<div className="mt-1 text-[10px] text-[#8d8d8d]">
-												{cfg.min}–{cfg.max}
+											
+											<div className="space-y-3">
+												{/* Slider for visual input */}
+												<div className="">
+													<input
+														type="range"
+														min={param.min}
+														max={param.max}
+														step={param.step}
+														value={currentValue}
+														onChange={(e) => handleKoiValueChange(param.key, parseFloat(e.target.value))}
+														className="w-full h-2 bg-[var(--placeholder-color)] rounded-lg appearance-none cursor-pointer slider"
+														style={{
+															background: `linear-gradient(to right, #000 0%, #000 ${((currentValue - param.min) / (param.max - param.min)) * 100}%, #d9d9d9 ${((currentValue - param.min) / (param.max - param.min)) * 100}%, #d9d9d9 100%)`
+														}}
+													/>
+												</div>
+												
+												{/* Precise numeric input */}
+												<div className="flex items-center gap-2">
+													<input
+														type="number"
+														min={param.min}
+														max={param.max}
+														step={param.step}
+														value={currentValue}
+														onChange={(e) => {
+															const val = parseFloat(e.target.value);
+															if (!isNaN(val) && val >= param.min && val <= param.max) {
+																handleKoiValueChange(param.key, val);
+															}
+														}}
+														className="flex-1 px-3 py-2 text-sm border border-[var(--input-border)] rounded bg-[var(--input-background)] focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black"
+														placeholder={param.defaultValue.toString()}
+													/>
+													<button
+														onClick={() => handleKoiValueChange(param.key, param.defaultValue)}
+														className="px-2 py-2 text-xs bg-[var(--input-background)] border border-[var(--input-border)] rounded hover:bg-[var(--hover-background)] transition-colors"
+														title="Reset to default"
+													>
+														↻
+													</button>
+												</div>
+												
+												{/* Range indicator */}
+												<div className="flex justify-between text-xs text-[var(--text-secondary)]">
+													<span>{param.min}</span>
+													<span>{param.max}</span>
+												</div>
 											</div>
 										</div>
 									);
 								})}
 							</div>
-							<div className="mt-10">
-								<h3 className="text-sm font-semibold mb-3">
-									Additional Parameters (15–28)
-								</h3>
-								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
-									{directInputConfigs.map((cfg, i) => (
-										<div key={cfg.id} className="flex flex-col">
-											<label
-												className="text-[11px] font-medium mb-1"
-												htmlFor={`direct-${cfg.id}`}
-											>
-												{cfg.label}
-											</label>
-											<input
-												id={`direct-${cfg.id}`}
-												type="number"
-												className="w-full text-xs rounded border border-[#AFAFAF] bg-white h-8 px-2"
-												value={directValues[i]}
-												min={cfg.min}
-												max={cfg.max}
-												onChange={(e) => {
-													const val =
-														e.target.value === '' ? 0 : Number(e.target.value);
-													setDirectValues((prev) =>
-														prev.map((v, idx) => (idx === i ? val : v)),
-													);
-												}}
-											/>
-										</div>
-									))}
-								</div>
-							</div>
+
 						</CardContent>
 					</Card>
 					<Card>
@@ -553,18 +500,18 @@ export default function DataInputTab() {
 					<CardContent className="py-16">
 						<div className="max-w-xl mx-auto text-center space-y-4">
 							<h2 className="text-xl font-semibold">
-								Feature Unavailable for Selected Model
+								Manual Data Entry Unavailable
 							</h2>
 							<p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-								Manual data entry is not supported while using the{' '}
-								<span className="font-medium">{selectedModel}</span> model.
-								Please switch to a different model to enable this feature.
+								For inputting data manually, select another model. The current selected model{' '}
+								<span className="font-medium">{selectedModel || 'CNN/DNN'}</span> requires
+								preloaded datasets for optimal performance.
 							</p>
 							<button
 								onClick={() => router.push('/dashboard/playground/overview')}
 								className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-black text-white text-sm font-medium hover:opacity-90 border border-black"
 							>
-								<span>Change Model</span>
+								<span>Select Another Model</span>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									className="w-4 h-4"
@@ -860,8 +807,9 @@ export default function DataInputTab() {
 						<CardTitle>Preloaded Dataset Selection</CardTitle>
 						<CardContent>
 							<p className="text-sm text-[var(--text-secondary)] mb-4 max-w-3xl">
-								Choose one curated exoplanet dataset from Kepler or TESS
-								missions. Selection is single-choice.
+								{isRestrictedModel 
+									? 'Select from available datasets optimized for the current model.'
+									: 'Choose from curated exoplanet datasets from Kepler or TESS missions. Selection is single-choice.'}
 							</p>
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 								{datasetCards.map((ds) => {
@@ -977,13 +925,12 @@ export default function DataInputTab() {
 			{viewMode === 'preloaded' && isRestrictedModel && (
 				<>
 					<Card>
-						<CardTitle>Record Selection (Single Sample)</CardTitle>
+						<CardTitle>Test Data Selection</CardTitle>
 						<CardContent>
 							<p className="text-sm text-[var(--text-secondary)] mb-4 max-w-2xl">
-								The <span className="font-medium">{selectedModel}</span> model
-								requires selecting an individual processed observation for
-								evaluation. A temporary set of 10 randomly generated record IDs
-								is shown below.
+								Select a test record from the Kepler Objects of Interest dataset.
+								The <span className="font-medium">{selectedModel || 'CNN/DNN'}</span> model
+								requires individual processed observations for evaluation.
 							</p>
 							<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
 								{recordIds.map((id) => (

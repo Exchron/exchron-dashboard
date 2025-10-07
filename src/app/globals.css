@@ -79,3 +79,34 @@ body {
 ::-webkit-scrollbar-thumb:hover {
 	background: var(--input-border);
 }
+
+/* Custom slider styling for KOI parameters */
+input[type="range"].slider {
+	-webkit-appearance: none;
+	appearance: none;
+	height: 8px;
+	border-radius: 4px;
+	outline: none;
+}
+
+input[type="range"].slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: #000;
+	cursor: pointer;
+	border: 2px solid #fff;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+input[type="range"].slider::-moz-range-thumb {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: #000;
+	cursor: pointer;
+	border: 2px solid #fff;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
