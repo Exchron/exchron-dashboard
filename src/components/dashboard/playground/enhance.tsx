@@ -26,13 +26,6 @@ const slideUpKeyframes = `
 `;
 
 export default function EnhanceTab() {
-	// Model tuning sliders
-	const initialSliderValues = [50, 50, 50, 50];
-	const [sliderValues, setSliderValues] =
-		useState<number[]>(initialSliderValues);
-	const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
-	const [isDragging, setIsDragging] = useState(false);
-
 	// Upload states
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -45,6 +38,10 @@ export default function EnhanceTab() {
 	const [tuningDescription, setTuningDescription] = useState('');
 	const [tuningSaved, setTuningSaved] = useState(false);
 	const [saving, setSaving] = useState(false);
+
+	// Email states
+	const [email, setEmail] = useState('');
+	const [emailError, setEmailError] = useState('');
 
 	// Modal state (for final submission acknowledgement)
 	const [showModal, setShowModal] = useState(false);
@@ -65,80 +62,22 @@ export default function EnhanceTab() {
 		};
 	}, []);
 
-	// Calculate value from mouse position
-	const calculateSliderValue = (
-		event: React.MouseEvent<HTMLDivElement> | MouseEvent,
-		sliderRect: DOMRect,
-	) => {
-		// For horizontal sliders, calculate percentage from left
-		const offsetX = event.clientX - sliderRect.left;
-		const percentage = Math.min(
-			Math.max((offsetX / sliderRect.width) * 100, 0),
-			100,
-		);
-
-		// Round to nearest integer
-		return Math.round(percentage);
+	// Email validation
+	const validateEmail = (email: string) => {
+		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+		return emailRegex.test(email);
 	};
 
-	// Handle slider click/drag start
-	const handleSliderMouseDown = (
-		index: number,
-		event: React.MouseEvent<HTMLDivElement>,
-	) => {
-		event.preventDefault();
-		setActiveDragIndex(index);
-		setIsDragging(true);
-
-		const slider = event.currentTarget;
-		const rect = slider.getBoundingClientRect();
-
-		// Update value based on initial click position
-		const value = calculateSliderValue(event, rect);
-		const newSliderValues = [...sliderValues];
-		newSliderValues[index] = value;
-		setSliderValues(newSliderValues);
-	};
-
-	// Handle mouse move during drag
-	const handleMouseMove = (event: MouseEvent) => {
-		if (!isDragging || activeDragIndex === null) return;
-
-		const sliders = document.querySelectorAll('.horizontal-slider-container');
-		if (!sliders[activeDragIndex]) return;
-
-		const slider = sliders[activeDragIndex];
-		const rect = slider.getBoundingClientRect();
-
-		const value = calculateSliderValue(event, rect);
-
-		// Update slider value
-		const newSliderValues = [...sliderValues];
-		newSliderValues[activeDragIndex] = value;
-		setSliderValues(newSliderValues);
-	};
-
-	// Handle drag end
-	const handleMouseUp = () => {
-		if (isDragging) {
-			setIsDragging(false);
-			setActiveDragIndex(null);
+	const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const value = e.target.value;
+		setEmail(value);
+		
+		if (value && !validateEmail(value)) {
+			setEmailError('Please enter a valid email address');
+		} else {
+			setEmailError('');
 		}
 	};
-
-	// Add/remove event listeners for dragging
-	useEffect(() => {
-		if (isDragging) {
-			window.addEventListener('mousemove', handleMouseMove);
-			window.addEventListener('mouseup', handleMouseUp);
-		}
-
-		// Cleanup
-		return () => {
-			window.removeEventListener('mousemove', handleMouseMove);
-			window.removeEventListener('mouseup', handleMouseUp);
-		};
-	}, [isDragging, activeDragIndex, sliderValues]);
 
 	// File selection
 	const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,11 +117,6 @@ export default function EnhanceTab() {
 		setUploadProgress(0);
 	};
 
-	// Derived flags
-	const tuningDirty =
-		sliderValues.some((v, i) => v !== initialSliderValues[i]) ||
-		tuningDescription.trim() !== '';
-
 	const handleSaveTuning = () => {
 		setSaving(true);
 		setTimeout(() => {
@@ -190,11 +124,6 @@ export default function EnhanceTab() {
 			setTuningSaved(true);
 			setTimeout(() => setTuningSaved(false), 2500);
 		}, 900);
-	};
-
-	const handleResetTuning = () => {
-		setSliderValues(initialSliderValues);
-		setTuningDescription('');
 	};
 
 	const handleFinalSubmit = () => {
@@ -299,15 +228,23 @@ export default function EnhanceTab() {
 								</div>
 							)}
 
-							<div className="flex items-center justify-between bg-[var(--input-background)] rounded-xl border border-[var(--input-border)] p-4">
-								<input
-									type="email"
-									placeholder="info.exchron@gmail.com"
-									className="bg-transparent border-none outline-none w-3/5 placeholder-[var(--text-secondary)]"
-								/>
-								<span className="font-medium text-[var(--text-neutral)] text-sm">
-									Contact Email
-								</span>
+							<div className="space-y-2">
+								<div className="flex items-center justify-between bg-[var(--input-background)] rounded-xl border border-[var(--input-border)] p-4">
+									<input
+										type="email"
+										value={email}
+										onChange={handleEmailChange}
+										placeholder="your.email@example.com"
+										className="bg-transparent border-none outline-none w-3/5 placeholder-[var(--text-secondary)]"
+										required
+									/>
+									<span className="font-medium text-[var(--text-neutral)] text-sm">
+										Contact Email *
+									</span>
+								</div>
+								{emailError && (
+									<p className="text-red-500 text-xs">{emailError}</p>
+								)}
 							</div>
 						</div>
 					</CardContent>
@@ -315,10 +252,10 @@ export default function EnhanceTab() {
 					{/* Button placed at bottom-right of the card, match Submit Tuning sizing */}
 					<div className="mt-4 pt-4 border-t border-[var(--input-border)] flex justify-end">
 						<button
-							disabled={uploadStage !== 'success'}
+							disabled={uploadStage !== 'success' || !email || !validateEmail(email)}
 							onClick={handleFinalSubmit}
 							className={`px-5 py-3 rounded-xl text-sm font-semibold transition-colors ${
-								uploadStage === 'success'
+								uploadStage === 'success' && email && validateEmail(email)
 									? 'bg-black text-white'
 									: 'bg-[var(--input-background)] text-[var(--text-secondary)] cursor-not-allowed border border-[var(--input-border)]'
 							}`}
@@ -333,43 +270,35 @@ export default function EnhanceTab() {
 					<CardTitle>Model Tuning Suggestions</CardTitle>
 					<CardContent>
 						<div className="space-y-6">
-							{[1, 2, 3, 4].map((param, index) => (
-								<div key={param} className="flex flex-col">
-									<div className="flex justify-between text-xs font-medium mb-1">
-										<span>Parameter {param}</span>
-										<span>{sliderValues[index]} mm</span>
-									</div>
-									<div
-										className="relative h-3 w-full bg-[var(--placeholder-color)] rounded-lg cursor-pointer horizontal-slider-container"
-										onMouseDown={(e) => handleSliderMouseDown(index, e)}
-									>
-										<div
-											className="absolute left-0 h-3 bg-white rounded-lg border border-[var(--input-border)]"
-											style={{ width: `${sliderValues[index]}%` }}
-										/>
-										<div
-											className="absolute top-1/2 -translate-y-1/2 w-[18px] h-[18px] bg-white rounded-[4px] border border-[var(--input-border)] shadow-sm"
-											style={{
-												left: `${sliderValues[index]}%`,
-												marginLeft: '-9px',
-											}}
-										/>
-									</div>
-									<div className="mt-2 text-[10px] text-center text-[#8d8d8d]">
-										0–100 mm
-									</div>
+							<div className="space-y-2">
+								<div className="flex items-center justify-between bg-[var(--input-background)] rounded-xl border border-[var(--input-border)] p-4">
+									<input
+										type="email"
+										value={email}
+										onChange={handleEmailChange}
+										placeholder="your.email@example.com"
+										className="bg-transparent border-none outline-none w-3/5 placeholder-[var(--text-secondary)]"
+										required
+									/>
+									<span className="font-medium text-[var(--text-neutral)] text-sm">
+										Contact Email *
+									</span>
 								</div>
-							))}
+								{emailError && (
+									<p className="text-red-500 text-xs">{emailError}</p>
+								)}
+							</div>
 
 							<div>
 								<label className="font-medium block mb-2 text-sm">
-									Improvement Rationale
+									Improvement Rationale *
 								</label>
 								<textarea
 									value={tuningDescription}
 									onChange={(e) => setTuningDescription(e.target.value)}
-									placeholder="Describe your adjustments and expected impact..."
-									className="w-full h-28 bg-[var(--light-selected)] border border-[var(--input-border)] rounded-lg p-3 outline-none focus:ring-2 focus:ring-black/20 text-sm"
+									placeholder="Describe your suggestions for model improvements, parameter adjustments, and expected impact..."
+									className="w-full h-32 bg-[var(--light-selected)] border border-[var(--input-border)] rounded-lg p-3 outline-none focus:ring-2 focus:ring-black/20 text-sm"
+									required
 								/>
 								<p className="text-xs mt-3 text-[var(--text-secondary)] leading-relaxed">
 									Submissions are reviewed; accepted suggestions may appear in
@@ -378,7 +307,7 @@ export default function EnhanceTab() {
 							</div>
 
 							<div className="flex flex-wrap gap-3 items-center">
-								{tuningDirty && (
+								{tuningDescription.trim() !== '' && (
 									<>
 										<button
 											onClick={handleSaveTuning}
@@ -392,14 +321,14 @@ export default function EnhanceTab() {
 											{saving ? 'Saving…' : 'Save Suggestion'}
 										</button>
 										<button
-											onClick={handleResetTuning}
+											onClick={() => setTuningDescription('')}
 											className="px-4 py-2 rounded-md text-sm font-medium bg-[var(--input-background)] border border-[var(--input-border)] hover:bg-[var(--hover-background)]"
 										>
-											Reset
+											Clear
 										</button>
 									</>
 								)}
-								{!tuningDirty && tuningSaved && (
+								{tuningDescription.trim() === '' && tuningSaved && (
 									<div className="flex items-center gap-2 text-green-600 text-sm font-medium">
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
@@ -418,10 +347,10 @@ export default function EnhanceTab() {
 								)}
 								<div className="ml-auto">
 									<button
-										disabled={!tuningSaved && !tuningDirty}
+										disabled={!email || !validateEmail(email) || tuningDescription.trim() === ''}
 										onClick={handleFinalSubmit}
 										className={`px-5 py-3 rounded-xl text-sm font-semibold transition-colors ${
-											tuningDirty || tuningSaved
+											email && validateEmail(email) && tuningDescription.trim() !== ''
 												? 'bg-black text-white'
 												: 'bg-[var(--input-background)] text-[var(--text-secondary)] cursor-not-allowed border border-[var(--input-border)]'
 										}`}
@@ -439,27 +368,68 @@ export default function EnhanceTab() {
 			<Card className="border border-[var(--input-border)]">
 				<CardTitle>Help Us Improve Our Predictions</CardTitle>
 				<CardContent>
-					<p className="mb-4 text-sm leading-relaxed">
-						Provide context, edge-case examples, or domain notes that can guide
-						future model refinement. Datasets and parameter rationales help us
-						prioritize high-impact adjustments.
-					</p>
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-						<div className="space-y-4 text-sm">
-							<p>
-								• Contribute unique transit light curves or labeled validation
-								sets.
-							</p>
-							<p>
-								• Highlight false positives / negatives and why they matter.
-							</p>
-							<p>• Suggest additional engineered features for evaluation.</p>
+					<div className="space-y-6 text-sm leading-relaxed">
+						<p>
+							We're building the future of exoplanet discovery through machine learning, and your contributions make our models better. Whether you're a researcher, student, or enthusiast, there are multiple ways to help improve our prediction accuracy and expand our capabilities.
+						</p>
+
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div className="space-y-4">
+								<h4 className="font-semibold text-base">Contribute to Development</h4>
+								<p>
+									If you have improvement suggestions, feature requests, or want to contribute code, visit our official GitHub repository. You can create pull requests, start discussions, or report issues to help us build better tools.
+								</p>
+								<div className="flex items-center gap-3">
+									<span className="font-medium">GitHub:</span>
+									<a
+										href="https://github.com/Exchron"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-blue-600 hover:text-blue-800 underline transition-colors"
+									>
+										https://github.com/Exchron
+									</a>
+								</div>
+							</div>
+
+							<div className="space-y-4">
+								<h4 className="font-semibold text-base">Get Support & Documentation</h4>
+								<p>
+									Need help with the interface, API integration, or understanding our models? Our comprehensive documentation covers everything from getting started to advanced usage patterns and best practices.
+								</p>
+								<div className="flex items-center gap-3">
+									<span className="font-medium">Docs:</span>
+									<a
+										href="https://docs.exchronai.earth"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-blue-600 hover:text-blue-800 underline transition-colors"
+									>
+										docs.exchronai.earth
+									</a>
+								</div>
+							</div>
 						</div>
-						<div className="space-y-4 text-sm">
-							<p className="font-medium">Want to contribute directly?</p>
+
+						<div className="bg-[var(--input-background)] rounded-lg p-4 space-y-3">
+							<h4 className="font-semibold text-base">Direct Contact & Data Privacy</h4>
 							<p>
-								Visit the project repository or contact the Exchron team to
-								request collaboration access and extended tooling.
+								Have questions about how your data is processed, stored, or used in our model training? Want to understand our fine-tuning methodology or discuss collaboration opportunities? We're committed to transparency and responsible AI practices.
+							</p>
+							<div className="flex items-center gap-3">
+								<span className="font-medium">Contact:</span>
+								<a
+									href="mailto:info.exchron@gmail.com"
+									className="text-blue-600 hover:text-blue-800 underline transition-colors"
+								>
+									info.exchron@gmail.com
+								</a>
+							</div>
+						</div>
+
+						<div className="text-xs text-[var(--text-secondary)] border-t border-[var(--input-border)] pt-4">
+							<p>
+								<strong>Ways to contribute:</strong> Submit unique datasets • Report false positives/negatives • Suggest feature engineering improvements • Share domain expertise • Contribute validation sets • Provide model feedback
 							</p>
 						</div>
 					</div>

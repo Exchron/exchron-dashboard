@@ -401,16 +401,10 @@ export default function OverviewTab() {
 							</CardContent>
 						</Card>
 						<Card className="relative">
-							<CardTitle>Metrics Comparison</CardTitle>
+							<CardTitle>More Insights</CardTitle>
 							<CardContent>
 								<p className="mb-4 text-sm text-left text-[var(--text-secondary)]">
-									Comparison of{' '}
-									<span className="font-medium text-black">{model.short}</span>{' '}
-									vs{' '}
-									<span className="font-medium text-black">
-										{model.comparisonBaseline}
-									</span>{' '}
-									across core evaluation metrics.
+									Click on an image to view a larger version.
 								</p>
 								<div className="mt-6 grid grid-cols-2 gap-4">
 									{model.id === 'exchron-cnn' && (

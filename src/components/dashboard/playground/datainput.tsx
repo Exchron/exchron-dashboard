@@ -111,20 +111,62 @@ export default function DataInputTab() {
 	const handleDatasetSelect = (id: string) =>
 		setSelectedDataset((prev) => (prev === id ? null : id));
 
-	// Restricted model record selection (10 random IDs)
+	// Kepler ID input for CNN/DNN models
+	const [keplerIdInput, setKeplerIdInput] = React.useState<string>('');
+	const [keplerIdValid, setKeplerIdValid] = React.useState<boolean | null>(null);
+	const [allowedKeplerIds, setAllowedKeplerIds] = React.useState<Set<string>>(new Set());
+	const [loadingKeplerIds, setLoadingKeplerIds] = React.useState<boolean>(false);
+	
+	// Load allowed Kepler IDs from CSV file
+	React.useEffect(() => {
+		if (isRestrictedModel) {
+			setLoadingKeplerIds(true);
+			fetch('/CNN-DNN-allowed.csv')
+				.then(response => {
+					if (!response.ok) {
+						throw new Error(`HTTP error! status: ${response.status}`);
+					}
+					return response.text();
+				})
+				.then(csvText => {
+					const lines = csvText.trim().split('\n');
+					const ids = new Set<string>();
+					// Skip header row
+					for (let i = 1; i < lines.length; i++) {
+						const kepid = lines[i].split(',')[0]?.trim();
+						if (kepid) {
+							ids.add(kepid);
+						}
+					}
+					setAllowedKeplerIds(ids);
+					console.log(`Loaded ${ids.size} allowed Kepler IDs`);
+				})
+				.catch(err => {
+					console.error('Failed to load allowed Kepler IDs:', err);
+				})
+				.finally(() => {
+					setLoadingKeplerIds(false);
+				});
+		}
+	}, [isRestrictedModel]);
+	
+	// Validate Kepler ID input
+	const handleKeplerIdChange = (value: string) => {
+		setKeplerIdInput(value);
+		if (value.trim() === '') {
+			setKeplerIdValid(null);
+			return;
+		}
+		
+		const isValid = allowedKeplerIds.has(value.trim());
+		setKeplerIdValid(isValid);
+	};
+	
+	// Legacy record IDs for backward compatibility (if needed)
 	const [recordIds, setRecordIds] = React.useState<string[]>([]);
 	const [selectedRecordId, setSelectedRecordId] = React.useState<string | null>(
 		null,
 	);
-	React.useEffect(() => {
-		if (isRestrictedModel && viewMode === 'preloaded') {
-			const ids = Array.from({ length: 10 }).map(
-				() => 'REC-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
-			);
-			setRecordIds(ids);
-			setSelectedRecordId(null);
-		}
-	}, [isRestrictedModel, viewMode]);
 
 
 
@@ -246,7 +288,7 @@ export default function DataInputTab() {
 				: null;
 		const buildPreloaded = () => {
 			if (isRestrictedModel)
-				return selectedRecordId ? [{ recordId: selectedRecordId }] : [];
+				return keplerIdValid === true ? [{ keplerId: keplerIdInput.trim() }] : [];
 			return selectedDataset ? [{ datasetId: selectedDataset }] : [];
 		};	// Determine if input selection is complete for enabling Evaluate
 	const isReady = React.useMemo(() => {
@@ -256,7 +298,7 @@ export default function DataInputTab() {
 			return uploadStatus.stage === 'success';
 		}
 		if (viewMode === 'preloaded') {
-			if (isRestrictedModel) return !!selectedRecordId; // need a record
+			if (isRestrictedModel) return keplerIdValid === true; // need a valid Kepler ID
 			return !!selectedDataset; // need a dataset
 		}
 		return false;
@@ -264,7 +306,7 @@ export default function DataInputTab() {
 		viewMode,
 		uploadStatus.stage,
 		isRestrictedModel,
-		selectedRecordId,
+		keplerIdValid,
 		selectedDataset,
 	]);
 
@@ -921,51 +963,157 @@ export default function DataInputTab() {
 				</>
 			)}
 
-			{/* Preloaded restricted (record ID selection) */}
+			{/* Preloaded restricted (Kepler ID input) */}
 			{viewMode === 'preloaded' && isRestrictedModel && (
 				<>
 					<Card>
-						<CardTitle>Test Data Selection</CardTitle>
+						<CardTitle>Kepler ID Input</CardTitle>
 						<CardContent>
 							<p className="text-sm text-[var(--text-secondary)] mb-4 max-w-2xl">
-								Select a test record from the Kepler Objects of Interest dataset.
-								The <span className="font-medium">{selectedModel || 'CNN/DNN'}</span> model
-								requires individual processed observations for evaluation.
+								Enter a Kepler ID from the test database to analyze with the{' '}
+								<span className="font-medium">{selectedModel || 'CNN/DNN'}</span> model.
+								The model requires individual processed observations for evaluation.
 							</p>
-							<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-								{recordIds.map((id) => (
-									<label
-										key={id}
-										className={`border rounded-lg px-3 py-3 text-xs cursor-pointer flex items-center gap-2 transition ${
-											selectedRecordId === id
-												? 'bg-black text-white border-black'
-												: 'bg-white border-[var(--input-border)] hover:bg-[var(--hover-background)]'
-										}`}
-									>
-										<input
-											type="radio"
-											name="recordId"
-											value={id}
-											className="hidden"
-											onChange={() => setSelectedRecordId(id)}
-										/>
-										<span className="font-mono tracking-wide">{id}</span>
-										{selectedRecordId === id && (
+							
+							<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+								{/* Left side - Input form */}
+								<div className="space-y-3">
+									<div className="space-y-2">
+										<label className="block text-sm font-medium text-gray-700">
+											Kepler ID
+										</label>
+										<div className="relative">
+											<input
+												type="text"
+												value={keplerIdInput}
+												onChange={(e) => handleKeplerIdChange(e.target.value)}
+												placeholder={loadingKeplerIds ? "Loading allowed IDs..." : "Enter Kepler ID (e.g., 10904857)"}
+												disabled={loadingKeplerIds}
+												className={`w-full p-3 border rounded-lg font-mono text-sm transition-colors ${
+													loadingKeplerIds
+														? 'border-gray-300 bg-gray-100 text-gray-500'
+														: keplerIdValid === true
+														? 'border-green-500 bg-green-50'
+														: keplerIdValid === false
+														? 'border-red-500 bg-red-50'
+														: 'border-[var(--input-border)] bg-[var(--input-background)]'
+												}`}
+											/>
+											{keplerIdValid === true && (
+												<div className="absolute right-3 top-1/2 -translate-y-1/2">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														viewBox="0 0 20 20"
+														fill="currentColor"
+														className="w-5 h-5 text-green-600"
+													>
+														<path
+															fillRule="evenodd"
+															d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+															clipRule="evenodd"
+														/>
+													</svg>
+												</div>
+											)}
+											{keplerIdValid === false && (
+												<div className="absolute right-3 top-1/2 -translate-y-1/2">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														viewBox="0 0 20 20"
+														fill="currentColor"
+														className="w-5 h-5 text-red-600"
+													>
+														<path
+															fillRule="evenodd"
+															d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
+															clipRule="evenodd"
+														/>
+													</svg>
+												</div>
+											)}
+										</div>
+									</div>
+									
+									{keplerIdValid === false && keplerIdInput.trim() !== '' && (
+										<p className="text-sm text-red-600">
+											Kepler ID not found in test database. Please enter a valid ID from the allowed list.
+										</p>
+									)}
+									
+									{keplerIdValid === true && (
+										<p className="text-sm text-green-600 flex items-center gap-2">
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
 												viewBox="0 0 20 20"
 												fill="currentColor"
-												className="w-4 h-4 ml-auto"
+												className="w-4 h-4"
 											>
 												<path
 													fillRule="evenodd"
-													d="M16.704 5.29a1 1 0 010 1.415l-7.07 7.07a1 1 0 01-1.415 0L3.296 9.854a1 1 0 011.415-1.415l3.22 3.22 6.363-6.364a1 1 0 011.41-.004z"
+													d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
 													clipRule="evenodd"
 												/>
 											</svg>
-										)}
+											Valid Kepler ID found in test database
+										</p>
+									)}
+									
+									{loadingKeplerIds ? (
+										<div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+											<svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+												<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+												<path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+											</svg>
+											Loading allowed Kepler IDs from database...
+										</div>
+									) : (
+										<div className="text-xs text-[var(--text-secondary)] space-y-1">
+											<p className="font-medium">Available Kepler IDs: {allowedKeplerIds.size} total</p>
+											<p>Click any ID from the list on the right to select it</p>
+										</div>
+									)}
+								</div>
+
+								{/* Right side - Scrollable list of Kepler IDs */}
+								<div className="space-y-2">
+									<label className="block text-sm font-medium text-gray-700">
+										Available Kepler IDs ({allowedKeplerIds.size} total)
 									</label>
-								))}
+									{loadingKeplerIds ? (
+										<div className="flex items-center justify-center h-64 bg-[var(--input-background)] border border-[var(--input-border)] rounded-lg">
+											<div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+												<svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+													<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+													<path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+												</svg>
+												Loading Kepler IDs...
+											</div>
+										</div>
+									) : (
+										<div className="h-64 bg-white border border-[var(--input-border)] rounded-lg overflow-hidden">
+											<div className="h-full overflow-y-auto p-2 space-y-1">
+												{Array.from(allowedKeplerIds)
+													.sort((a, b) => parseInt(a) - parseInt(b))
+													.map((keplerId) => (
+													<button
+														key={keplerId}
+														onClick={() => handleKeplerIdChange(keplerId)}
+														className={`w-full text-left px-3 py-2 text-xs font-mono rounded transition-colors ${
+															keplerIdInput.trim() === keplerId
+																? 'bg-black text-white'
+																: 'hover:bg-[var(--hover-background)] bg-[var(--input-background)]'
+														}`}
+													>
+														{keplerId}
+													</button>
+												))}
+											</div>
+										</div>
+									)}
+									<p className="text-xs text-[var(--text-secondary)]">
+										Scroll through the list and click any ID to select it
+									</p>
+								</div>
 							</div>
 						</CardContent>
 					</Card>

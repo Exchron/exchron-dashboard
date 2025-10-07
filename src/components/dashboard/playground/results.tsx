@@ -98,12 +98,9 @@ export default function ResultsTab() {
 								</div>
 							</div>
 							{exoplanetTypeLocked && (
-								<button
-									onClick={() => setExoplanetTypeLocked(false)}
-									className="absolute inset-0 m-auto h-12 w-32 bg-black text-white rounded-md font-semibold shadow flex items-center justify-center"
-								>
-									Predict
-								</button>
+								<div className="absolute inset-0 m-auto h-12 w-32 bg-black text-white rounded-md font-semibold shadow flex items-center justify-center">
+									Coming Soon
+								</div>
 							)}
 						</div>
 
@@ -147,12 +144,9 @@ export default function ResultsTab() {
 								</div>
 							</div>
 							{habitabilityLocked && (
-								<button
-									onClick={() => setHabitabilityLocked(false)}
-									className="absolute inset-0 m-auto h-12 w-32 bg-black text-white rounded-md font-semibold shadow flex items-center justify-center"
-								>
-									Predict
-								</button>
+								<div className="absolute inset-0 m-auto h-12 w-32 bg-black text-white rounded-md font-semibold shadow flex items-center justify-center">
+									Coming Soon
+								</div>
 							)}
 						</div>
 					</div>
