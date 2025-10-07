@@ -302,29 +302,13 @@ export default function ResultsTab() {
 
 			{/* Open Source / Resources Section */}
 			<Card className="border border-[var(--input-border)]">
-				<CardTitle>Open Source Project</CardTitle>
+				<CardTitle>Resources for Follow-up Research</CardTitle>
 				<CardContent>
 					<div className="flex flex-col items-center justify-center text-center py-10 gap-6">
 						<h3 className="font-bold text-base tracking-tight">
-							This dashboard is an open source project.
+							use these resources to find out more about your exoplanet and
+							confirm your results
 						</h3>
-						<a
-							href="https://github.com/"
-							target="_blank"
-							rel="noopener noreferrer"
-							className="group inline-flex items-center gap-3 px-5 py-3 rounded-lg bg-black text-white font-semibold shadow transition transform hover:scale-[1.04] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-black"
-							aria-label="View source on GitHub"
-						>
-							<svg
-								className="w-6 h-6"
-								viewBox="0 0 24 24"
-								fill="currentColor"
-								aria-hidden="true"
-							>
-								<path d="M12 .5C5.648.5.5 5.648.5 12c0 5.087 3.292 9.387 7.868 10.907.575.107.785-.248.785-.553 0-.273-.01-.995-.015-1.953-3.201.696-3.877-1.543-3.877-1.543-.523-1.33-1.278-1.685-1.278-1.685-1.044-.714.08-.699.08-.699 1.155.081 1.763 1.187 1.763 1.187 1.027 1.76 2.695 1.252 3.35.957.104-.744.402-1.252.732-1.54-2.556-.291-5.244-1.278-5.244-5.69 0-1.257.448-2.285 1.182-3.09-.119-.29-.513-1.462.112-3.047 0 0 .965-.309 3.164 1.181a10.92 10.92 0 0 1 2.882-.388c.978.004 1.964.132 2.883.388 2.197-1.49 3.161-1.181 3.161-1.181.626 1.585.232 2.757.114 3.047.737.805 1.181 1.833 1.181 3.09 0 4.423-2.694 5.395-5.258 5.68.413.353.779 1.047.779 2.112 0 1.526-.014 2.756-.014 3.132 0 .308.207.667.79.552C20.213 21.383 23.5 17.084 23.5 12 23.5 5.648 18.352.5 12 .5Z" />
-							</svg>
-							<span className="text-sm">GitHub</span>
-						</a>
 					</div>
 				</CardContent>
 			</Card>

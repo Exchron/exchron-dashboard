@@ -17,6 +17,13 @@ import m_data from '../../../../assets/DNN/m_data.jpg';
 import GB_output from '../../../../assets/GB/output.png';
 import GB_output1 from '../../../../assets/GB/output1.png';
 import GB_output3 from '../../../../assets/GB/output3.png';
+// SVM
+import SVM_output from '../../../../assets/SVM/output.png';
+import SVM_output1 from '../../../../assets/SVM/output1.png';
+import SVM_output2 from '../../../../assets/SVM/output2.png';
+import SVM_output3 from '../../../../assets/SVM/output3.png';
+import SVM_output4 from '../../../../assets/SVM/output4.png';
+import SVM_output5 from '../../../../assets/SVM/output5.png';
 
 // Types
 type ModelMetric = {
@@ -145,8 +152,8 @@ const MODELS: PlaygroundModel[] = [
 		id: 'exchron-svm',
 		short: 'EXCHRON-SVM',
 		description: [
-			'EXCHRON_SVM is a support vector machine model designed for robust exoplanet classification through optimal hyperplane separation in high-dimensional feature space. The model employs a radial basis function (RBF) kernel to capture complex non-linear decision boundaries between confirmed exoplanets and false positive detections. By mapping input features into a higher-dimensional space, the SVM can effectively separate classes that are not linearly separable in the original feature space, making it particularly effective for distinguishing subtle differences in stellar and orbital parameters.',
-			'The model incorporates careful feature scaling and regularization through the C parameter to balance between maximizing the margin and minimizing classification errors. Class imbalance is handled through weighted training, ensuring that minority class samples (true planets) receive appropriate attention during optimization. With its strong theoretical foundation and excellent generalization properties, EXCHRON_SVM provides reliable classification performance even with limited training data, making it a valuable complement to ensemble methods for critical decision-making in exoplanet validation pipelines.',
+			'EXCHRON_SVM is a Support Vector Machine classifier designed for detecting exoplanet candidates using the Kepler Objects of Interest (KOI) dataset. The model classifies celestial objects as either confirmed exoplanet candidates or non-candidates based on 15 astronomical features including orbital period, transit depth, stellar parameters, and signal quality metrics. Using an RBF (Radial Basis Function) kernel, the SVM maps input features into higher-dimensional space to capture complex non-linear decision boundaries between true exoplanets and false positive detections.',
+			'The implementation incorporates comprehensive data preprocessing with median imputation for missing values, StandardScaler normalization, and stratified train-test splitting to maintain class balance. Hyperparameter optimization through grid search with 3-fold cross-validation tested 18 parameter combinations across C values [10, 100, 1000], kernels [RBF, linear], and gamma settings [scale, 0.01, 0.1]. The model provides probability estimates for classification confidence and includes proper feature scaling to ensure optimal SVM performance, making it highly effective for distinguishing subtle differences in stellar and orbital parameters.',
 		],
 		architecturePlaceholders: [
 			{ label: 'EXCHRON_SVM Architecture' },
@@ -162,11 +169,11 @@ const MODELS: PlaygroundModel[] = [
 		],
 		parameters: {
 			'Kernel': 'RBF',
-			'C Parameter': '10.0',
-			'Gamma': '0.001',
-			'Class Weight': 'balanced',
-			'Max Iterations': 1000,
-			'Tolerance': '1e-4',
+			'C Parameter': '100',
+			'Gamma': 'scale',
+			'Probability': 'True',
+			'Random State': 42,
+			'CV Folds': 3,
 		},
 		comparisonBaseline: 'EXCHRON_GB',
 		comparisonMetrics: [
@@ -346,6 +353,20 @@ export default function OverviewTab() {
 											</figcaption>
 										</figure>
 									)}
+									{model.id === 'exchron-svm' && (
+										<figure className="mx-auto max-w-[760px] mb-6 text-center">
+											<Image
+												src={SVM_output2}
+												alt="EXCHRON_SVM Decision Boundary"
+												className="w-full h-auto rounded-lg border border-[var(--input-border)] cursor-pointer hover:opacity-80 transition-opacity"
+												placeholder="blur"
+												onClick={() => setModalImage({ src: SVM_output2, alt: "EXCHRON_SVM Decision Boundary" })}
+											/>
+											<figcaption className="mt-2 text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
+												Decision Boundary
+											</figcaption>
+										</figure>
+									)}
 								</div>
 							</CardContent>
 						</Card>
@@ -457,7 +478,30 @@ export default function OverviewTab() {
 												</div>
 											</figure>
 										)}
-										{!['exchron-cnn', 'exchron-dnn', 'exchron-gb'].includes(model.id) && (
+										{model.id === 'exchron-svm' && (
+											<figure
+												style={{
+													aspectRatio: `${SVM_output1.width} / ${SVM_output1.height}`,
+												}}
+												className="w-full cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: SVM_output1, alt: "EXCHRON_SVM Grid Search Results" })}
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={SVM_output1}
+														alt="EXCHRON_SVM grid search results"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 800px) 100vw, 480px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-2 py-0.5 rounded">
+														Grid Search Results
+													</span>
+												</div>
+											</figure>
+										)}
+										{!['exchron-cnn', 'exchron-dnn', 'exchron-gb', 'exchron-svm'].includes(model.id) && (
 											<div className="rounded-md border border-[var(--input-border)] bg-[var(--placeholder-color)] h-[200px] flex items-center justify-center text-sm text-[var(--text-secondary)]">
 												Training / Validation Curves
 											</div>
@@ -581,6 +625,29 @@ export default function OverviewTab() {
 													/>
 													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded">
 														ROC Curve
+													</span>
+												</div>
+											</figure>
+										</div>
+									)}
+									{model.id === 'exchron-svm' && (
+										<div className="col-span-2 flex justify-center">
+											<figure
+												style={{ aspectRatio: `${SVM_output5.width} / ${SVM_output5.height}` }}
+												className="w-full max-w-md cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => setModalImage({ src: SVM_output5, alt: "EXCHRON_SVM Performance Overview" })}
+											>
+												<div className="relative w-full h-full rounded-md border border-[var(--input-border)] overflow-hidden bg-white">
+													<Image
+														src={SVM_output5}
+														alt="EXCHRON_SVM Performance Overview"
+														fill
+														className="object-contain"
+														placeholder="blur"
+														sizes="(max-width: 900px) 100vw, 420px"
+													/>
+													<span className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded">
+														Performance Overview
 													</span>
 												</div>
 											</figure>
