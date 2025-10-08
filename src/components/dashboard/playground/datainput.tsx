@@ -1367,38 +1367,66 @@ export default function DataInputTab() {
 							<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 								<div>
 									<p className="leading-relaxed text-sm mb-4">
-										Preloaded datasets are quality-controlled and ready for
-										immediate model evaluation. Each dataset includes metadata
-										about observation conditions, stellar properties, and
-										validated transit parameters.
+										For the Gradient Boosting and Support Vector Machine models, data obtained from the NASA Exoplanet Archive was used. The K2 dataset wasn't used - only Kepler Objects of Interest (KOI) and TESS Objects of Interest (TOI) were utilized for model development.
 									</p>
+									
+									<div className="mb-6">
+										<h4 className="text-sm font-semibold mb-3 text-black">Selected Features for Model Development:</h4>
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-xs">
+											{[
+												'koi_period',
+												'koi_time0bk', 
+												'koi_impact',
+												'koi_duration',
+												'koi_depth',
+												'koi_incl',
+												'koi_model_snr',
+												'koi_count',
+												'koi_bin_oedp_sig',
+												'koi_steff',
+												'koi_slogg',
+												'koi_srad',
+												'koi_smass',
+												'koi_kepmag'
+											].map((feature) => (
+												<div key={feature} className="flex items-center gap-2 p-1.5 bg-[var(--input-background)] rounded border border-[var(--input-border)]">
+													<span className="font-mono text-[11px]">{feature}</span>
+												</div>
+											))}
+										</div>
+									</div>
+
 									<div className="space-y-2 text-sm">
 										<div className="flex justify-between">
 											<span className="text-[var(--text-secondary)]">
-												Total Available Samples:
+												KOI Dataset Records:
 											</span>
-											<span className="font-medium">33,132</span>
+											<span className="font-medium">~7,000</span>
 										</div>
 										<div className="flex justify-between">
 											<span className="text-[var(--text-secondary)]">
-												Data Format:
+												TOI Dataset Records:
 											</span>
-											<span className="font-medium">
-												Normalized Light Curves
-											</span>
+											<span className="font-medium">~5,000</span>
 										</div>
 										<div className="flex justify-between">
 											<span className="text-[var(--text-secondary)]">
-												Preprocessing:
+												Data Source:
 											</span>
-											<span className="font-medium">Detrended & Filtered</span>
+											<span className="font-medium">NASA Exoplanet Archive</span>
+										</div>
+										<div className="flex justify-between">
+											<span className="text-[var(--text-secondary)]">
+												Features Used:
+											</span>
+											<span className="font-medium">14 Selected Parameters</span>
 										</div>
 									</div>
 								</div>
 								<div className="flex items-center justify-center">
 									<div className="bg-[var(--placeholder-color)] h-[240px] w-full rounded-lg border border-[var(--input-border)] flex items-center justify-center">
 										<span className="text-[var(--text-secondary)] text-sm">
-											Dataset Distribution
+											Feature Distribution
 										</span>
 									</div>
 								</div>
@@ -1568,38 +1596,73 @@ export default function DataInputTab() {
 							<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 								<div>
 									<p className="leading-relaxed text-sm mb-4">
-										Preloaded datasets are quality-controlled and ready for
-										immediate model evaluation. Each dataset includes metadata
-										about observation conditions, stellar properties, and
-										validated transit parameters.
+										For training and validation, a selected set of KOI were taken due to time constraints and larger training times required for both CNNs & DNNs. The randomly selected 2,000 targets were chosen by looking at data quality, ensuring 1,000 are exoplanets and 1,000 are not exoplanets.
 									</p>
+									
+									<p className="leading-relaxed text-sm mb-4">
+										For the selected 2,000 data records, extracted features were downloaded using NASA Exoplanet Archive, and then using the LightKurve package for Python, all the light curve FITS files were obtained. From these light curve files, a set of unique features were extracted.
+									</p>
+									
+									<div className="mb-6">
+										<h4 className="text-sm font-semibold mb-3 text-black">Data Components Used:</h4>
+										<div className="space-y-1 text-xs">
+											{[
+												'Raw light curves',
+												'Light curve extracted features', 
+												'Kepler extracted features',
+												'Stellar properties'
+											].map((component) => (
+												<div key={component} className="flex items-center gap-2 p-1.5 bg-[var(--input-background)] rounded border border-[var(--input-border)]">
+													<div className="w-2 h-2 bg-black rounded-full flex-shrink-0"></div>
+													<span className="text-[11px]">{component}</span>
+												</div>
+											))}
+										</div>
+									</div>
+
+									<div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+										<p className="text-xs text-blue-800 leading-relaxed">
+											<strong>Note:</strong> Both for training and predictions, the raw light curve data and extracted features are used. This is why manual uploading is disabled for these models.
+										</p>
+									</div>
+
 									<div className="space-y-2 text-sm">
 										<div className="flex justify-between">
 											<span className="text-[var(--text-secondary)]">
 												Total Available Samples:
 											</span>
-											<span className="font-medium">33,132</span>
+											<span className="font-medium">2,000</span>
 										</div>
 										<div className="flex justify-between">
 											<span className="text-[var(--text-secondary)]">
-												Data Format:
+												Class Balance:
 											</span>
-											<span className="font-medium">
-												Normalized Light Curves
+											<span className="font-medium">1,000 each (50/50)</span>
+										</div>
+										<div className="flex justify-between">
+											<span className="text-[var(--text-secondary)]">
+												Data Source:
 											</span>
+											<span className="font-medium">NASA Exoplanet Archive</span>
 										</div>
 										<div className="flex justify-between">
 											<span className="text-[var(--text-secondary)]">
 												Preprocessing:
 											</span>
-											<span className="font-medium">Detrended & Filtered</span>
+											<span className="font-medium">LightKurve Package</span>
 										</div>
+									</div>
+									
+									<div className="mt-4 text-xs text-[var(--text-secondary)]">
+										<p>
+											<strong>Preprocessing:</strong> A separate light curve preprocessing was concluded during the extraction. For more information, see the original GitHub repository.
+										</p>
 									</div>
 								</div>
 								<div className="flex items-center justify-center">
 									<div className="bg-[var(--placeholder-color)] h-[240px] w-full rounded-lg border border-[var(--input-border)] flex items-center justify-center">
 										<span className="text-[var(--text-secondary)] text-sm">
-											Dataset Distribution
+											Light Curve Distribution
 										</span>
 									</div>
 								</div>
