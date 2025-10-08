@@ -13,22 +13,24 @@ function formatPercent(v: number | undefined) {
 export default function ResultsTab() {
 	const { predictions, status, error } = usePrediction();
 	
-	// Check for DL model results
+	// Check for DL model results and ML model results
 	const [dlPredictionResult, setDlPredictionResult] = useState<any>(null);
 	const [selectedModel, setSelectedModel] = useState<any>(null);
 	const [selectedKeplerId, setSelectedKeplerId] = useState<string | null>(null);
+	const [mlModelType, setMlModelType] = useState<string | null>(null);
 
-	// Load DL prediction result from session storage
+	// Load prediction results from session storage
 	useEffect(() => {
 		const storedResult = sessionStorage.getItem('dlPredictionResult');
 		const storedKeplerId = sessionStorage.getItem('selectedKeplerId');
 		const storedModel = localStorage.getItem('selectedModel');
+		const storedMlModelType = sessionStorage.getItem('mlModelType');
 		
 		if (storedResult) {
 			try {
 				setDlPredictionResult(JSON.parse(storedResult));
 			} catch (e) {
-				console.error('Failed to parse DL prediction result:', e);
+				console.error('Failed to parse prediction result:', e);
 			}
 		}
 		
@@ -43,6 +45,10 @@ export default function ResultsTab() {
 			} catch {
 				setSelectedModel({ id: storedModel, name: storedModel });
 			}
+		}
+		
+		if (storedMlModelType) {
+			setMlModelType(storedMlModelType);
 		}
 	}, []);
 
@@ -82,10 +88,12 @@ export default function ResultsTab() {
 
 	return (
 		<div className="flex flex-col space-y-8">
-			{/* Show DL Model Info if DL prediction result exists */}
+			{/* Show Model Info if prediction result exists */}
 			{dlPredictionResult && (
 				<Card className="border border-[var(--input-border)]">
-					<CardTitle>Deep Learning Model Results</CardTitle>
+					<CardTitle>
+						{mlModelType ? `${mlModelType.toUpperCase()} Model Results` : 'Deep Learning Model Results'}
+					</CardTitle>
 					<CardContent>
 						<div className="flex flex-col items-center gap-4">
 							{selectedModel && (
@@ -98,6 +106,11 @@ export default function ResultsTab() {
 											Kepler ID: <span className="font-mono font-medium">{selectedKeplerId}</span>
 										</p>
 									)}
+									{mlModelType && dlPredictionResult.datasource === 'manual' && (
+										<p className="text-sm text-[var(--text-secondary)]">
+											Data Source: <span className="font-medium">Manual Entry</span>
+										</p>
+									)}
 								</div>
 							)}
 							
@@ -108,7 +121,25 @@ export default function ResultsTab() {
 									</p>
 								</div>
 								
-								{dlPredictionResult.lightcurve_link && (
+								{/* Show features used for ML models */}
+								{mlModelType && dlPredictionResult.features_used && (
+									<div className="space-y-3 text-sm">
+										<p className="font-medium">Input Features Used:</p>
+										<div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto">
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+												{Object.entries(dlPredictionResult.features_used).map(([key, value]) => (
+													<div key={key} className="flex justify-between">
+														<span className="text-gray-600">{key}:</span>
+														<span className="font-mono font-medium">{typeof value === 'number' ? value.toFixed(3) : String(value)}</span>
+													</div>
+												))}
+											</div>
+										</div>
+									</div>
+								)}
+								
+								{/* Show additional resources for DL models */}
+								{!mlModelType && dlPredictionResult.lightcurve_link && (
 									<div className="space-y-2 text-sm">
 										<p className="font-medium">Additional Resources:</p>
 										<div className="space-y-1">
@@ -311,8 +342,8 @@ export default function ResultsTab() {
 			<Card className="border border-[var(--input-border)] overflow-hidden">
 				<CardTitle>Other Reports & Validation Results</CardTitle>
 				<CardContent className="p-4">
-					{/* DV Report PDF Embed */}
-					{dlPredictionResult && dlPredictionResult.dv_report_link && (
+					{/* DV Report PDF Embed - Only for DL models */}
+					{dlPredictionResult && !mlModelType && dlPredictionResult.dv_report_link && (
 						<div className="mb-8">
 							<h3 className="font-semibold mb-3 text-sm tracking-wide uppercase text-[var(--text-secondary)]">
 								Data Validation Report
@@ -347,10 +378,61 @@ export default function ResultsTab() {
 												<path
 													strokeLinecap="round"
 													strokeLinejoin="round"
-													d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+													d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
 												/>
 											</svg>
 										</a>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{/* ML Model Results Summary - Only for ML models */}
+					{dlPredictionResult && mlModelType && dlPredictionResult.features_used && (
+						<div className="mb-8">
+							<h3 className="font-semibold mb-3 text-sm tracking-wide uppercase text-[var(--text-secondary)]">
+								Model Input Summary
+							</h3>
+							<div className="border border-[var(--input-border)] rounded-lg bg-white p-4">
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<h4 className="font-medium text-sm mb-2">Model Information</h4>
+										<div className="space-y-1 text-sm">
+											<div className="flex justify-between">
+												<span className="text-[var(--text-secondary)]">Algorithm:</span>
+												<span className="font-medium">{mlModelType.toUpperCase()}</span>
+											</div>
+											<div className="flex justify-between">
+												<span className="text-[var(--text-secondary)]">Data Source:</span>
+												<span className="font-medium">Manual Entry</span>
+											</div>
+											<div className="flex justify-between">
+												<span className="text-[var(--text-secondary)]">Features:</span>
+												<span className="font-medium">{Object.keys(dlPredictionResult.features_used).length}</span>
+											</div>
+										</div>
+									</div>
+									<div>
+										<h4 className="font-medium text-sm mb-2">Key Parameters</h4>
+										<div className="space-y-1 text-xs">
+											<div className="flex justify-between">
+												<span className="text-[var(--text-secondary)]">Period:</span>
+												<span className="font-mono">{dlPredictionResult.features_used.koi_period?.toFixed(3)} days</span>
+											</div>
+											<div className="flex justify-between">
+												<span className="text-[var(--text-secondary)]">Depth:</span>
+												<span className="font-mono">{dlPredictionResult.features_used.koi_depth?.toFixed(1)} ppm</span>
+											</div>
+											<div className="flex justify-between">
+												<span className="text-[var(--text-secondary)]">Duration:</span>
+												<span className="font-mono">{dlPredictionResult.features_used.koi_duration?.toFixed(2)} hrs</span>
+											</div>
+											<div className="flex justify-between">
+												<span className="text-[var(--text-secondary)]">SNR:</span>
+												<span className="font-mono">{dlPredictionResult.features_used.koi_model_snr?.toFixed(1)}</span>
+											</div>
+										</div>
 									</div>
 								</div>
 							</div>

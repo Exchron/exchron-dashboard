@@ -382,8 +382,107 @@ export default function DataInputTab() {
 					setError(errorMessage);
 				}
 			}
+		} else if (viewMode === 'manual' && !isRestrictedModel) {
+			// For GB/SVM models with manual data entry
+			setLoading();
+			
+			try {
+				// Extract model type from selected model
+				let modelType = 'gb'; // default
+				const storedModel = localStorage.getItem('selectedModel');
+				if (storedModel) {
+					try {
+						const parsed = JSON.parse(storedModel);
+						const modelId = parsed.id || storedModel;
+						if (modelId.toLowerCase().includes('svm')) {
+							modelType = 'svm';
+						} else if (modelId.toLowerCase().includes('gb') || modelId.toLowerCase().includes('gradient')) {
+							modelType = 'gb';
+						}
+					} catch {
+						// Legacy string format
+						if (storedModel.toLowerCase().includes('svm')) {
+							modelType = 'svm';
+						} else if (storedModel.toLowerCase().includes('gb') || storedModel.toLowerCase().includes('gradient')) {
+							modelType = 'gb';
+						}
+					}
+				}
+
+				// Build the prediction payload from slider values
+				const payload = {
+					model: modelType,
+					datasource: 'manual',
+					features: {
+						koi_period: koiValues.koi_period || koiParameters.find(p => p.key === 'koi_period')?.defaultValue || 10.0,
+						koi_time0bk: koiValues.koi_time0bk || koiParameters.find(p => p.key === 'koi_time0bk')?.defaultValue || 170.0,
+						koi_impact: koiValues.koi_impact || koiParameters.find(p => p.key === 'koi_impact')?.defaultValue || 0.5,
+						koi_duration: koiValues.koi_duration || koiParameters.find(p => p.key === 'koi_duration')?.defaultValue || 3.0,
+						koi_depth: koiValues.koi_depth || koiParameters.find(p => p.key === 'koi_depth')?.defaultValue || 100.0,
+						koi_incl: koiValues.koi_incl || koiParameters.find(p => p.key === 'koi_incl')?.defaultValue || 89.0,
+						koi_model_snr: koiValues.koi_model_snr || koiParameters.find(p => p.key === 'koi_model_snr')?.defaultValue || 50.0,
+						koi_count: koiValues.koi_count || koiParameters.find(p => p.key === 'koi_count')?.defaultValue || 50,
+						koi_bin_oedp_sig: koiValues.koi_bin_oedp_sig || koiParameters.find(p => p.key === 'koi_bin_oedp_sig')?.defaultValue || 0.0,
+						koi_steff: koiValues.koi_steff || koiParameters.find(p => p.key === 'koi_steff')?.defaultValue || 5778,
+						koi_slogg: koiValues.koi_slogg || koiParameters.find(p => p.key === 'koi_slogg')?.defaultValue || 4.44,
+						koi_srad: koiValues.koi_srad || koiParameters.find(p => p.key === 'koi_srad')?.defaultValue || 1.0,
+						koi_smass: koiValues.koi_smass || koiParameters.find(p => p.key === 'koi_smass')?.defaultValue || 1.0,
+						koi_kepmag: koiValues.koi_kepmag || koiParameters.find(p => p.key === 'koi_kepmag')?.defaultValue || 12.0
+					},
+					predict: true
+				};
+
+				console.log('Making ML prediction request with payload:', payload);
+
+				const response = await fetch('/api/ml-predict', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(payload),
+				});
+
+				if (!response.ok) {
+					const errorData = await response.json();
+					throw new Error(errorData.error || errorData.details || `API request failed with status ${response.status}`);
+				}
+
+				const result = await response.json();
+				console.log('ML prediction result:', result);
+				
+				// Store the result for the results page (similar format to DL results)
+				const mlResult = {
+					candidate_probability: result.candidate_probability,
+					non_candidate_probability: result.non_candidate_probability,
+					model_used: modelType.toUpperCase(),
+					datasource: 'manual',
+					features_used: payload.features
+				};
+				
+				sessionStorage.setItem('dlPredictionResult', JSON.stringify(mlResult));
+				sessionStorage.setItem('mlModelType', modelType);
+				
+				// Navigate to results
+				router.push('/dashboard/playground/results');
+
+			} catch (err) {
+				console.error('ML prediction error:', err);
+				const errorMessage = err instanceof Error ? err.message : 'Failed to get ML prediction';
+				
+				// Check if it's a connection issue
+				if (errorMessage.includes('Cannot connect') || 
+					errorMessage.includes('ECONNREFUSED') ||
+					errorMessage.includes('fetch') || 
+					errorMessage.includes('network')) {
+					setError('Cannot connect to ML prediction service. Please ensure the service is running on localhost:8000');
+				} else if (errorMessage.includes('timeout')) {
+					setError('Prediction request timed out. Please try again.');
+				} else {
+					setError(errorMessage);
+				}
+			}
 		} else {
-			// For other models, proceed normally
+			// For other modes, proceed normally
 			router.push('/dashboard/playground/results');
 		}
 	};
@@ -392,31 +491,16 @@ export default function DataInputTab() {
 		{
 			id: 'kepler-validated',
 			name: 'Kepler Objects of Interest Test Data',
-			description: 'High-confidence transit events from Kepler mission',
+			description: 'This includes test data that the model has not seen during training',
 			samples: 4892,
 			duration: '2009-2017',
 		},
 		{
 			id: 'tess-candidates',
 			name: 'TESS Objects of Interest Test Data',
-			description: 'Recent candidates identified by TESS survey',
+			description: 'This includes test data that the model has not seen during training',
 			samples: 2674,
 			duration: '2018-2024',
-		},
-		{
-			id: 'synthetic-lightcurves',
-			name: 'Synthetic Light Curves',
-			description:
-				'Computer-generated transit simulations with known parameters',
-			samples: 10000,
-			duration: 'Simulated',
-		},
-		{
-			id: 'mixed-dataset',
-			name: 'Mixed Training Set',
-			description: 'Combined real and synthetic data for robust training',
-			samples: 15566,
-			duration: 'Combined',
 		},
 	];
 
