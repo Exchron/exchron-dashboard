@@ -50,6 +50,38 @@ export async function POST(request: Request) {
 					);
 				}
 			}
+		} else if (body.datasource === 'upload') {
+			// For uploaded data, validate features-target-X objects
+			const requiredFeatures = [
+				'koi_period', 'koi_time0bk', 'koi_impact', 'koi_duration', 'koi_depth',
+				'koi_incl', 'koi_model_snr', 'koi_count', 'koi_bin_oedp_sig', 'koi_steff',
+				'koi_slogg', 'koi_srad', 'koi_smass', 'koi_kepmag'
+			];
+
+			let hasValidFeatures = false;
+			for (let i = 1; i <= 3; i++) {
+				const featuresKey = `features-target-${i}`;
+				if (body[featuresKey]) {
+					hasValidFeatures = true;
+					const features = body[featuresKey];
+					
+					for (const feature of requiredFeatures) {
+						if (!(feature in features) || typeof features[feature] !== 'number') {
+							return NextResponse.json(
+								{ error: `Missing or invalid feature in ${featuresKey}: ${feature}` },
+								{ status: 400 }
+							);
+						}
+					}
+				}
+			}
+
+			if (!hasValidFeatures) {
+				return NextResponse.json(
+					{ error: 'At least one features-target-X object is required for upload datasource' },
+					{ status: 400 }
+				);
+			}
 		} else if (body.datasource === 'pre-loaded') {
 			// For preloaded data, validate data field
 			if (!body.data) {
@@ -67,7 +99,7 @@ export async function POST(request: Request) {
 			}
 		} else {
 			return NextResponse.json(
-				{ error: 'Invalid datasource. Must be "manual" or "pre-loaded"' },
+				{ error: 'Invalid datasource. Must be "manual", "upload", or "pre-loaded"' },
 				{ status: 400 }
 			);
 		}
@@ -130,6 +162,16 @@ export async function POST(request: Request) {
 					{ status: 502 }
 				);
 			}
+		} else if (body.datasource === 'upload') {
+			// For uploaded data, expect aggregated response with individual predictions
+			if (typeof data.candidate_probability !== 'number' || 
+				typeof data.non_candidate_probability !== 'number') {
+				return NextResponse.json(
+					{ error: 'Invalid response format from ML API for upload prediction' },
+					{ status: 502 }
+				);
+			}
+			// Individual predictions are optional for upload, so we don't validate them strictly
 		} else if (body.datasource === 'pre-loaded') {
 			// For preloaded data, expect averaged probabilities and individual results
 			if (typeof data.candidate_probability !== 'number' || 

@@ -236,20 +236,123 @@ export default function DataInputTab() {
 			handleFileSelection(newFile);
 		};
 		const handleUploadTrigger = () => fileInputRef.current?.click();
-		const simulateUpload = () => {
+
+		// CSV validation and parsing function for KOI data format
+		const validateAndParseCSV = (content: string): { isValid: boolean; data?: any[]; error?: string } => {
+			try {
+				const parsed = parseCsv(content);
+				if (!parsed || parsed.length === 0) {
+					return { isValid: false, error: 'File appears to be empty or invalid' };
+				}
+
+				// Required KOI parameters for the API
+				const requiredColumns = [
+					'koi_period', 'koi_time0bk', 'koi_impact', 'koi_duration', 'koi_depth',
+					'koi_incl', 'koi_model_snr', 'koi_count', 'koi_bin_oedp_sig', 'koi_steff',
+					'koi_slogg', 'koi_srad', 'koi_smass', 'koi_kepmag'
+				];
+
+				// Get the headers from the parsed data
+				const headers = Object.keys(parsed[0] || {});
+				
+				// Check which required columns are missing
+				const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+				
+				if (missingColumns.length > 0) {
+					return { 
+						isValid: false, 
+						error: `Missing required columns: ${missingColumns.join(', ')}. Please ensure your CSV includes all KOI parameters.` 
+					};
+				}
+
+				// Validate data rows
+				const validRows = [];
+				const errors = [];
+
+				for (let i = 0; i < Math.min(parsed.length, 1000); i++) { // Limit to 1000 rows for processing
+					const row = parsed[i];
+					const validatedRow: Record<string, number> = {};
+					let hasErrors = false;
+
+					for (const col of requiredColumns) {
+						const value = row[col];
+						if (value === null || value === undefined || value === '') {
+							errors.push(`Row ${i + 1}: Missing value for ${col}`);
+							hasErrors = true;
+							continue;
+						}
+
+						const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+						if (isNaN(numValue) || !isFinite(numValue)) {
+							errors.push(`Row ${i + 1}: Invalid numeric value for ${col}: ${value}`);
+							hasErrors = true;
+							continue;
+						}
+
+						validatedRow[col] = numValue;
+					}
+
+					if (!hasErrors) {
+						validRows.push(validatedRow);
+					}
+				}
+
+				if (validRows.length === 0) {
+					return { 
+						isValid: false, 
+						error: `No valid data rows found. Errors: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '...' : ''}` 
+					};
+				}
+
+				if (errors.length > 0 && errors.length >= parsed.length * 0.5) {
+					return { 
+						isValid: false, 
+						error: `Too many invalid rows (${errors.length}/${parsed.length}). Please check your data format.` 
+					};
+				}
+
+				return { 
+					isValid: true, 
+					data: validRows.slice(0, 100), // Limit to 100 rows for API processing
+					...(errors.length > 0 && { error: `Processed ${validRows.length} valid rows, skipped ${errors.length} invalid rows.` })
+				};
+
+			} catch (err) {
+				return { 
+					isValid: false, 
+					error: `Failed to parse CSV: ${err instanceof Error ? err.message : 'Unknown error'}` 
+				};
+			}
+		};
+
+		const processUpload = async () => {
 			if (!selectedFile) return;
-			setUploadStatus({ stage: 'validating', message: 'Validating file...' });
-			setTimeout(() => {
-				setUploadStatus({ stage: 'uploading', message: 'Uploading data...' });
-				setTimeout(
-					() =>
-						setUploadStatus({
-							stage: 'success',
-							message: 'File uploaded and validated successfully.',
-						}),
-					1200,
-				);
-			}, 800);
+			
+			setUploadStatus({ stage: 'validating', message: 'Validating file format...' });
+			
+			try {
+				const fileContent = await selectedFile.text();
+				const { isValid, data, error } = validateAndParseCSV(fileContent);
+				
+				if (!isValid || !data) {
+					setUploadStatus({ stage: 'error', message: error || 'Invalid file format' });
+					return;
+				}
+				
+				// Store the parsed data for later use
+				sessionStorage.setItem('uploadedCSVData', JSON.stringify(data));
+				setUploadStatus({ 
+					stage: 'success', 
+					message: `File validated successfully. Found ${data.length} valid samples.${error ? ` Note: ${error}` : ''}` 
+				});
+				
+			} catch (err) {
+				console.error('File processing error:', err);
+				setUploadStatus({ 
+					stage: 'error', 
+					message: err instanceof Error ? err.message : 'Failed to process file' 
+				});
+			}
 		};
 		const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
 			e.preventDefault();
@@ -467,6 +570,128 @@ export default function DataInputTab() {
 
 			} catch (err) {
 				console.error('ML prediction error:', err);
+				const errorMessage = err instanceof Error ? err.message : 'Failed to get ML prediction';
+				
+				// Check if it's a connection issue
+				if (errorMessage.includes('Cannot connect') || 
+					errorMessage.includes('ECONNREFUSED') ||
+					errorMessage.includes('fetch') || 
+					errorMessage.includes('network')) {
+					setError('Cannot connect to ML prediction service. Please ensure the service is running on localhost:8000');
+				} else if (errorMessage.includes('timeout')) {
+					setError('Prediction request timed out. Please try again.');
+				} else {
+					setError(errorMessage);
+				}
+			}
+		} else if (viewMode === 'upload' && !isRestrictedModel && uploadStatus.stage === 'success') {
+			// For GB/SVM models with uploaded CSV data
+			setLoading();
+			
+			try {
+				// Extract model type from selected model
+				let modelType = 'gb'; // default
+				const storedModel = localStorage.getItem('selectedModel');
+				if (storedModel) {
+					try {
+						const parsed = JSON.parse(storedModel);
+						const modelId = parsed.id || storedModel;
+						if (modelId.toLowerCase().includes('svm')) {
+							modelType = 'svm';
+						} else if (modelId.toLowerCase().includes('gb') || modelId.toLowerCase().includes('gradient')) {
+							modelType = 'gb';
+						}
+					} catch {
+						// Legacy string format
+						if (storedModel.toLowerCase().includes('svm')) {
+							modelType = 'svm';
+						} else if (storedModel.toLowerCase().includes('gb') || storedModel.toLowerCase().includes('gradient')) {
+							modelType = 'gb';
+						}
+					}
+				}
+
+				// Get the uploaded CSV data from session storage
+				const uploadedDataStr = sessionStorage.getItem('uploadedCSVData');
+				if (!uploadedDataStr) {
+					throw new Error('No uploaded data found. Please upload a file first.');
+				}
+
+				const uploadedData = JSON.parse(uploadedDataStr);
+				if (!Array.isArray(uploadedData) || uploadedData.length === 0) {
+					throw new Error('Invalid uploaded data format.');
+				}
+
+				// Build the prediction payload in the required API format
+				const features: Record<string, any> = {};
+				
+				// Process up to 3 samples and create features-target-X format
+				const maxSamples = Math.min(uploadedData.length, 3);
+				for (let i = 0; i < maxSamples; i++) {
+					const sample = uploadedData[i];
+					features[`features-target-${i + 1}`] = {
+						koi_period: sample.koi_period,
+						koi_time0bk: sample.koi_time0bk,
+						koi_impact: sample.koi_impact,
+						koi_duration: sample.koi_duration,
+						koi_depth: sample.koi_depth,
+						koi_incl: sample.koi_incl,
+						koi_model_snr: sample.koi_model_snr,
+						koi_count: sample.koi_count,
+						koi_bin_oedp_sig: sample.koi_bin_oedp_sig,
+						koi_steff: sample.koi_steff,
+						koi_slogg: sample.koi_slogg,
+						koi_srad: sample.koi_srad,
+						koi_smass: sample.koi_smass,
+						koi_kepmag: sample.koi_kepmag
+					};
+				}
+
+				const payload = {
+					model: modelType,
+					datasource: 'upload',
+					...features,
+					predict: true
+				};
+
+				console.log('Making ML prediction request with uploaded CSV data:', payload);
+
+				const response = await fetch('/api/ml-predict', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(payload),
+				});
+
+				if (!response.ok) {
+					const errorData = await response.json();
+					throw new Error(errorData.error || errorData.details || `API request failed with status ${response.status}`);
+				}
+
+				const result = await response.json();
+				console.log('ML prediction result for uploaded data:', result);
+				
+				// Store the result for the results page
+				const mlResult = {
+					candidate_probability: result.candidate_probability,
+					non_candidate_probability: result.non_candidate_probability,
+					model_used: modelType.toUpperCase(),
+					datasource: 'upload',
+					samples_processed: maxSamples,
+					predictions: result.predictions || {},
+					features_used: uploadedData.slice(0, maxSamples)
+				};
+				
+				sessionStorage.setItem('dlPredictionResult', JSON.stringify(mlResult));
+				sessionStorage.setItem('mlModelType', modelType);
+				sessionStorage.setItem('uploadSampleCount', maxSamples.toString());
+				
+				// Navigate to results
+				router.push('/dashboard/playground/results');
+
+			} catch (err) {
+				console.error('ML prediction error with uploaded data:', err);
 				const errorMessage = err instanceof Error ? err.message : 'Failed to get ML prediction';
 				
 				// Check if it's a connection issue
@@ -824,30 +1049,30 @@ export default function DataInputTab() {
 							<CardTitle>Data Upload Guide</CardTitle>
 							<CardContent>
 								<p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">
-									Prepare a CSV file with Kepler Object of Interest (KOI) data columns including{' '}
+									Prepare a CSV file with the 14 required KOI parameters including{' '}
 									<code className="px-1 py-0.5 bg-[var(--input-background)] rounded text-[11px]">
-										kepid, koi_disposition, koi_period, koi_depth
+										koi_period, koi_time0bk, koi_impact, koi_duration, koi_depth
 									</code>
-									{' '}and other astronomical parameters. Each row represents one exoplanet candidate. Download the
+									{' '}and other astronomical measurements. Each row represents one exoplanet candidate. Download the
 									template below for the complete format and example data.
 								</p>
 								<button
 									type="button"
 									onClick={() => {
-										const csvContent = 'kepid,koi_disposition,koi_period,koi_time0bk,koi_impact,koi_duration,koi_depth,koi_incl,koi_model_snr,koi_count,koi_bin_oedp_sig,koi_steff,koi_slogg,koi_srad,koi_smass,koi_kepmag\n10904857,CANDIDATE,3.522,131.512,0.146,2.957,4668.8,89.18,25.1,48,0.002,5455,4.467,0.927,0.81,15.347\n10905746,FALSE POSITIVE,4.226,132.044,0.89,3.12,1864.3,87.85,18.6,42,-0.012,6015,4.44,1.132,1.021,14.876';
+										const csvContent = 'koi_period,koi_time0bk,koi_impact,koi_duration,koi_depth,koi_incl,koi_model_snr,koi_count,koi_bin_oedp_sig,koi_steff,koi_slogg,koi_srad,koi_smass,koi_kepmag\n10.0051,136.8303,0.148,3.481,143.3,89.61,11.4,2,0.4606,5912,4.453,0.924,0.884,14.634\n9.7423,122.2839,0.251,4.125,289.7,87.34,18.7,3,0.812,6142,4.298,1.087,1.156,13.891\n15.3741,145.762,0.089,2.847,78.9,91.23,9.8,1,0.234,5634,4.567,0.789,0.723,15.123';
 										const blob = new Blob([csvContent], {
 											type: 'text/csv;charset=utf-8;',
 										});
 										const url = URL.createObjectURL(blob);
 										const a = document.createElement('a');
 										a.href = url;
-										a.download = 'kepler-data-template.csv';
+										a.download = 'koi-parameters-template.csv';
 										a.click();
 										URL.revokeObjectURL(url);
 									}}
 									className="px-4 py-2 rounded-md border border-black bg-black text-white text-sm font-medium hover:opacity-90"
 								>
-									Download Template (kepler-data-template.csv)
+									Download Template (koi-parameters-template.csv)
 								</button>
 							</CardContent>
 						</Card>
@@ -939,7 +1164,7 @@ export default function DataInputTab() {
 													}
 													onClick={(e) => {
 														e.stopPropagation();
-														simulateUpload();
+														processUpload();
 													}}
 													className={`px-4 py-2 rounded-md border text-sm font-medium transition-colors ${
 														!selectedFile ||
@@ -950,7 +1175,7 @@ export default function DataInputTab() {
 															: 'border-black bg-white hover:bg-[var(--hover-background)]'
 													}`}
 												>
-													Upload
+													Validate & Process
 												</button>
 											</>
 										)}

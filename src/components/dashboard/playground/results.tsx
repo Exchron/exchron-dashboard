@@ -19,6 +19,7 @@ export default function ResultsTab() {
 	const [selectedKeplerId, setSelectedKeplerId] = useState<string | null>(null);
 	const [mlModelType, setMlModelType] = useState<string | null>(null);
 	const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
+	const [uploadSampleCount, setUploadSampleCount] = useState<number>(0);
 
 	// Load prediction results from session storage
 	useEffect(() => {
@@ -27,6 +28,7 @@ export default function ResultsTab() {
 		const storedModel = localStorage.getItem('selectedModel');
 		const storedMlModelType = sessionStorage.getItem('mlModelType');
 		const storedSelectedDataset = sessionStorage.getItem('selectedDataset');
+		const storedUploadSampleCount = sessionStorage.getItem('uploadSampleCount');
 		
 		if (storedResult) {
 			try {
@@ -55,6 +57,10 @@ export default function ResultsTab() {
 		
 		if (storedSelectedDataset) {
 			setSelectedDataset(storedSelectedDataset);
+		}
+		
+		if (storedUploadSampleCount) {
+			setUploadSampleCount(parseInt(storedUploadSampleCount, 10) || 0);
 		}
 	}, []);
 
@@ -107,7 +113,7 @@ export default function ResultsTab() {
 									<p className="text-sm text-[var(--text-secondary)] mb-2">
 										Model: <span className="font-medium">{selectedModel.name || selectedModel.id}</span>
 									</p>
-									{selectedKeplerId && !mlModelType && (
+									{selectedKeplerId && (
 										<p className="text-sm text-[var(--text-secondary)]">
 											Kepler ID: <span className="font-mono font-medium">{selectedKeplerId}</span>
 										</p>
@@ -117,6 +123,7 @@ export default function ResultsTab() {
 											Data Source: <span className="font-medium">
 												{dlPredictionResult.datasource === 'manual' ? 'Manual Entry' : 
 												 dlPredictionResult.datasource === 'pre-loaded' ? `Preloaded ${dlPredictionResult.data_type?.charAt(0).toUpperCase()}${dlPredictionResult.data_type?.slice(1)} Dataset` : 
+												 dlPredictionResult.datasource === 'upload' ? `Uploaded CSV (${uploadSampleCount} samples)` :
 												 'Unknown'}
 											</span>
 										</p>
@@ -134,22 +141,44 @@ export default function ResultsTab() {
 								{/* Show features used for ML models */}
 								{mlModelType && dlPredictionResult.features_used && (
 									<div className="space-y-3 text-sm">
-										<p className="font-medium">Input Features Used:</p>
+										<p className="font-medium">
+											{dlPredictionResult.datasource === 'upload' ? 'Sample Features from Uploaded Data:' : 'Input Features Used:'}
+										</p>
 										<div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto">
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-												{Object.entries(dlPredictionResult.features_used).map(([key, value]) => (
-													<div key={key} className="flex justify-between">
-														<span className="text-gray-600">{key}:</span>
-														<span className="font-mono font-medium">{typeof value === 'number' ? value.toFixed(3) : String(value)}</span>
-													</div>
-												))}
-											</div>
+											{dlPredictionResult.datasource === 'upload' && Array.isArray(dlPredictionResult.features_used) ? (
+												// Handle array of uploaded samples
+												<div className="space-y-3">
+													{dlPredictionResult.features_used.slice(0, 3).map((sample: any, idx: number) => (
+														<div key={idx} className="border-b border-gray-200 pb-2 last:border-b-0">
+															<p className="text-xs font-medium text-gray-700 mb-1">Sample {idx + 1}:</p>
+															<div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-xs">
+																{Object.entries(sample).map(([key, value]) => (
+																	<div key={key} className="flex justify-between">
+																		<span className="text-gray-600">{key}:</span>
+																		<span className="font-mono font-medium">{typeof value === 'number' ? value.toFixed(3) : String(value)}</span>
+																	</div>
+																))}
+															</div>
+														</div>
+													))}
+												</div>
+											) : (
+												// Handle single feature object for manual entry
+												<div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+													{Object.entries(dlPredictionResult.features_used).map(([key, value]) => (
+														<div key={key} className="flex justify-between">
+															<span className="text-gray-600">{key}:</span>
+															<span className="font-mono font-medium">{typeof value === 'number' ? value.toFixed(3) : String(value)}</span>
+														</div>
+													))}
+												</div>
+											)}
 										</div>
 									</div>
 								)}
 								
 								{/* Show additional resources for DL models */}
-								{!mlModelType && dlPredictionResult.lightcurve_link && (
+								{dlPredictionResult.lightcurve_link && (
 									<div className="space-y-2 text-sm">
 										<p className="font-medium">Additional Resources:</p>
 										<div className="space-y-1">
@@ -248,8 +277,8 @@ export default function ResultsTab() {
 							)}
 						</div>
 
-						{/* Average prediction note for ML preloaded models */}
-						{mlModelType && dlPredictionResult && dlPredictionResult.individual_predictions && (
+						{/* Average prediction note for ML models */}
+						{mlModelType && dlPredictionResult && (dlPredictionResult.individual_predictions || dlPredictionResult.datasource === 'upload') && (
 							<div className="lg:col-span-12 flex justify-center">
 								<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 max-w-2xl">
 									<div className="flex items-center gap-2">
@@ -268,7 +297,11 @@ export default function ResultsTab() {
 											/>
 										</svg>
 										<p className="text-sm text-blue-800">
-											<span className="font-medium">Average Prediction Results:</span> The probabilities shown above are averaged from 10 individual target predictions from the {dlPredictionResult.data_type} dataset.
+											<span className="font-medium">Average Prediction Results:</span> The probabilities shown above are averaged from{' '}
+											{dlPredictionResult.datasource === 'upload' 
+												? `${uploadSampleCount} uploaded samples`
+												: `10 individual target predictions from the ${dlPredictionResult.data_type} dataset`
+											}.
 										</p>
 									</div>
 								</div>
@@ -375,8 +408,99 @@ export default function ResultsTab() {
 			</Card>
 			)}
 
+			{/* Individual Predictions for Uploaded CSV Data */}
+			{dlPredictionResult && mlModelType && dlPredictionResult.datasource === 'upload' && dlPredictionResult.predictions && (
+				<Card className="border border-[var(--input-border)]">
+					<CardTitle>Individual Sample Predictions</CardTitle>
+					<CardContent>
+						<p className="text-sm text-[var(--text-secondary)] mb-6">
+							{mlModelType.toUpperCase()} model predictions for each uploaded sample.
+							The overall probability shown above is the average of these individual predictions.
+						</p>
+						
+						<div className="overflow-auto border border-[var(--input-border)] rounded-lg bg-white">
+							<table className="min-w-full text-sm">
+								<thead className="bg-[var(--hover-background)]">
+									<tr>
+										<th className="px-4 py-3 text-left font-medium">Sample</th>
+										<th className="px-4 py-3 text-left font-medium">Candidate Probability</th>
+										<th className="px-4 py-3 text-left font-medium">Non-Candidate Probability</th>
+										<th className="px-4 py-3 text-left font-medium">Classification</th>
+									</tr>
+								</thead>
+								<tbody>
+									{Object.entries(dlPredictionResult.predictions).map(([key, prediction]: [string, any], idx) => {
+										const isCandidate = prediction.candidate_probability > prediction.non_candidate_probability;
+										return (
+											<tr key={key} className="border-t border-[var(--input-border)] hover:bg-gray-50 transition-colors">
+												<td className="px-4 py-3 font-medium capitalize">{prediction.target_name || key}</td>
+												<td className="px-4 py-3">
+													<div className="flex items-center gap-2">
+														<span className={`font-medium ${isCandidate ? 'text-green-600' : 'text-gray-600'}`}>
+															{formatPercent(prediction.candidate_probability)}
+														</span>
+														{isCandidate && (
+															<div className="w-2 h-2 bg-green-500 rounded-full"></div>
+														)}
+													</div>
+												</td>
+												<td className="px-4 py-3">
+													<div className="flex items-center gap-2">
+														<span className={`font-medium ${!isCandidate ? 'text-red-600' : 'text-gray-600'}`}>
+															{formatPercent(prediction.non_candidate_probability)}
+														</span>
+														{!isCandidate && (
+															<div className="w-2 h-2 bg-red-500 rounded-full"></div>
+														)}
+													</div>
+												</td>
+												<td className="px-4 py-3">
+													<span className={`px-2 py-1 text-xs font-medium rounded-full ${
+														isCandidate 
+															? 'bg-green-100 text-green-800' 
+															: 'bg-red-100 text-red-800'
+													}`}>
+														{isCandidate ? 'Candidate' : 'Non-Candidate'}
+													</span>
+												</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+
+						<div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+							<div className="flex items-start gap-3">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0"
+									fill="none"
+									viewBox="0 0 24 24"
+									strokeWidth={2}
+									stroke="currentColor"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+									/>
+								</svg>
+								<div className="flex-1">
+									<h4 className="text-sm font-medium text-blue-800 mb-1">Upload Information</h4>
+									<p className="text-sm text-blue-700">
+										These predictions are based on {uploadSampleCount} samples from your uploaded CSV file. 
+										Each sample was validated and processed with the required KOI parameters for exoplanet classification.
+									</p>
+								</div>
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+			)}
+
 			{/* Individual Predictions for ML Preloaded Models */}
-			{dlPredictionResult && mlModelType && dlPredictionResult.individual_predictions && (
+			{dlPredictionResult && mlModelType && dlPredictionResult.datasource === 'pre-loaded' && dlPredictionResult.individual_predictions && (
 				<Card className="border border-[var(--input-border)]">
 					<CardTitle>Individual Target Predictions</CardTitle>
 					<CardContent>
@@ -469,12 +593,12 @@ export default function ResultsTab() {
 			)}
 
 			{/* Other Reports & Validation Results - For DL Models and other cases */}
-			{(!mlModelType || !dlPredictionResult?.individual_predictions) && (
+			{(!mlModelType || (!dlPredictionResult?.individual_predictions && dlPredictionResult?.datasource !== 'upload')) && (
 				<Card className="border border-[var(--input-border)] overflow-hidden">
 					<CardTitle>Other Reports & Validation Results</CardTitle>
 					<CardContent className="p-4">
 						{/* DV Report PDF Embed - Only for DL models */}
-						{dlPredictionResult && !mlModelType && dlPredictionResult.dv_report_link && (
+						{dlPredictionResult && dlPredictionResult.dv_report_link && (
 							<div className="mb-8">
 								<h3 className="font-semibold mb-3 text-sm tracking-wide uppercase text-[var(--text-secondary)]">
 									Data Validation Report
@@ -519,8 +643,8 @@ export default function ResultsTab() {
 							</div>
 						)}
 
-						{/* ML Model Results Summary - Only for manual entry ML models */}
-						{dlPredictionResult && mlModelType && dlPredictionResult.features_used && (
+						{/* ML Model Results Summary - For manual entry and upload ML models */}
+						{dlPredictionResult && mlModelType && dlPredictionResult.features_used && dlPredictionResult.datasource !== 'pre-loaded' && (
 							<div className="mb-8">
 								<h3 className="font-semibold mb-3 text-sm tracking-wide uppercase text-[var(--text-secondary)]">
 									Model Input Summary
@@ -536,33 +660,51 @@ export default function ResultsTab() {
 												</div>
 												<div className="flex justify-between">
 													<span className="text-[var(--text-secondary)]">Data Source:</span>
-													<span className="font-medium">Manual Entry</span>
+													<span className="font-medium">
+														{dlPredictionResult.datasource === 'manual' ? 'Manual Entry' : 
+														 dlPredictionResult.datasource === 'upload' ? `Uploaded CSV (${uploadSampleCount} samples)` : 
+														 'Unknown'}
+													</span>
 												</div>
 												<div className="flex justify-between">
 													<span className="text-[var(--text-secondary)]">Features:</span>
-													<span className="font-medium">{Object.keys(dlPredictionResult.features_used).length}</span>
+													<span className="font-medium">
+														{Array.isArray(dlPredictionResult.features_used) 
+															? Object.keys(dlPredictionResult.features_used[0] || {}).length 
+															: Object.keys(dlPredictionResult.features_used).length}
+													</span>
 												</div>
 											</div>
 										</div>
 										<div>
 											<h4 className="font-medium text-sm mb-2">Key Parameters</h4>
 											<div className="space-y-1 text-xs">
-												<div className="flex justify-between">
-													<span className="text-[var(--text-secondary)]">Period:</span>
-													<span className="font-mono">{dlPredictionResult.features_used.koi_period?.toFixed(3)} days</span>
-												</div>
-												<div className="flex justify-between">
-													<span className="text-[var(--text-secondary)]">Depth:</span>
-													<span className="font-mono">{dlPredictionResult.features_used.koi_depth?.toFixed(1)} ppm</span>
-												</div>
-												<div className="flex justify-between">
-													<span className="text-[var(--text-secondary)]">Duration:</span>
-													<span className="font-mono">{dlPredictionResult.features_used.koi_duration?.toFixed(2)} hrs</span>
-												</div>
-												<div className="flex justify-between">
-													<span className="text-[var(--text-secondary)]">SNR:</span>
-													<span className="font-mono">{dlPredictionResult.features_used.koi_model_snr?.toFixed(1)}</span>
-												</div>
+												{(() => {
+													// Get first sample for display purposes
+													const sample = Array.isArray(dlPredictionResult.features_used) 
+														? dlPredictionResult.features_used[0] 
+														: dlPredictionResult.features_used;
+													return (
+														<>
+															<div className="flex justify-between">
+																<span className="text-[var(--text-secondary)]">Period:</span>
+																<span className="font-mono">{sample?.koi_period?.toFixed(3)} days</span>
+															</div>
+															<div className="flex justify-between">
+																<span className="text-[var(--text-secondary)]">Depth:</span>
+																<span className="font-mono">{sample?.koi_depth?.toFixed(1)} ppm</span>
+															</div>
+															<div className="flex justify-between">
+																<span className="text-[var(--text-secondary)]">Duration:</span>
+																<span className="font-mono">{sample?.koi_duration?.toFixed(2)} hrs</span>
+															</div>
+															<div className="flex justify-between">
+																<span className="text-[var(--text-secondary)]">SNR:</span>
+																<span className="font-mono">{sample?.koi_model_snr?.toFixed(1)}</span>
+															</div>
+														</>
+													);
+												})()}
 											</div>
 										</div>
 									</div>
