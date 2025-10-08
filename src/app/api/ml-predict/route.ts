@@ -11,9 +11,9 @@ export async function POST(request: Request) {
 		const body = await request.json();
 		
 		// Validate required fields
-		if (!body.model || !body.datasource || !body.features || !body.predict) {
+		if (!body.model || !body.datasource || !body.predict) {
 			return NextResponse.json(
-				{ error: 'Missing required fields: model, datasource, features, predict' },
+				{ error: 'Missing required fields: model, datasource, predict' },
 				{ status: 400 }
 			);
 		}
@@ -26,28 +26,50 @@ export async function POST(request: Request) {
 			);
 		}
 
-		// Validate datasource
-		if (body.datasource !== 'manual') {
-			return NextResponse.json(
-				{ error: 'Invalid datasource. Must be "manual"' },
-				{ status: 400 }
-			);
-		}
-
-		// Validate features object
-		const requiredFeatures = [
-			'koi_period', 'koi_time0bk', 'koi_impact', 'koi_duration', 'koi_depth',
-			'koi_incl', 'koi_model_snr', 'koi_count', 'koi_bin_oedp_sig', 'koi_steff',
-			'koi_slogg', 'koi_srad', 'koi_smass', 'koi_kepmag'
-		];
-
-		for (const feature of requiredFeatures) {
-			if (!(feature in body.features) || typeof body.features[feature] !== 'number') {
+		// Validate datasource and required fields based on type
+		if (body.datasource === 'manual') {
+			// For manual data, validate features object
+			if (!body.features) {
 				return NextResponse.json(
-					{ error: `Missing or invalid feature: ${feature}` },
+					{ error: 'Missing features object for manual datasource' },
 					{ status: 400 }
 				);
 			}
+
+			const requiredFeatures = [
+				'koi_period', 'koi_time0bk', 'koi_impact', 'koi_duration', 'koi_depth',
+				'koi_incl', 'koi_model_snr', 'koi_count', 'koi_bin_oedp_sig', 'koi_steff',
+				'koi_slogg', 'koi_srad', 'koi_smass', 'koi_kepmag'
+			];
+
+			for (const feature of requiredFeatures) {
+				if (!(feature in body.features) || typeof body.features[feature] !== 'number') {
+					return NextResponse.json(
+						{ error: `Missing or invalid feature: ${feature}` },
+						{ status: 400 }
+					);
+				}
+			}
+		} else if (body.datasource === 'pre-loaded') {
+			// For preloaded data, validate data field
+			if (!body.data) {
+				return NextResponse.json(
+					{ error: 'Missing data field for pre-loaded datasource' },
+					{ status: 400 }
+				);
+			}
+
+			if (!['kepler', 'tess'].includes(body.data)) {
+				return NextResponse.json(
+					{ error: 'Invalid data type. Must be "kepler" or "tess"' },
+					{ status: 400 }
+				);
+			}
+		} else {
+			return NextResponse.json(
+				{ error: 'Invalid datasource. Must be "manual" or "pre-loaded"' },
+				{ status: 400 }
+			);
 		}
 
 		// Make request to external ML API
@@ -98,13 +120,39 @@ export async function POST(request: Request) {
 		const data = await response.json();
 		console.log('ML prediction successful:', data);
 
-		// Validate response format
-		if (typeof data.candidate_probability !== 'number' || 
-			typeof data.non_candidate_probability !== 'number') {
-			return NextResponse.json(
-				{ error: 'Invalid response format from ML API' },
-				{ status: 502 }
-			);
+		// Validate response format based on datasource
+		if (body.datasource === 'manual') {
+			// For manual data, expect simple response
+			if (typeof data.candidate_probability !== 'number' || 
+				typeof data.non_candidate_probability !== 'number') {
+				return NextResponse.json(
+					{ error: 'Invalid response format from ML API for manual prediction' },
+					{ status: 502 }
+				);
+			}
+		} else if (body.datasource === 'pre-loaded') {
+			// For preloaded data, expect averaged probabilities and individual results
+			if (typeof data.candidate_probability !== 'number' || 
+				typeof data.non_candidate_probability !== 'number') {
+				return NextResponse.json(
+					{ error: 'Invalid response format from ML API for preloaded prediction' },
+					{ status: 502 }
+				);
+			}
+
+			// Validate individual prediction results
+			const expectedKeys = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+			for (const key of expectedKeys) {
+				if (!data[key] || 
+					typeof data[key].candidate_probability !== 'number' || 
+					typeof data[key].non_candidate_probability !== 'number' ||
+					!data[key].kepid) {
+					return NextResponse.json(
+						{ error: `Invalid individual prediction result for ${key}` },
+						{ status: 502 }
+					);
+				}
+			}
 		}
 
 		return NextResponse.json(data, { status: 200 });

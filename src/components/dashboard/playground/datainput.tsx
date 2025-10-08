@@ -481,6 +481,111 @@ export default function DataInputTab() {
 					setError(errorMessage);
 				}
 			}
+		} else if (viewMode === 'preloaded' && !isRestrictedModel && selectedDataset) {
+			// For GB/SVM models with preloaded data
+			setLoading();
+			
+			try {
+				// Extract model type from selected model
+				let modelType = 'gb'; // default
+				const storedModel = localStorage.getItem('selectedModel');
+				if (storedModel) {
+					try {
+						const parsed = JSON.parse(storedModel);
+						const modelId = parsed.id || storedModel;
+						if (modelId.toLowerCase().includes('svm')) {
+							modelType = 'svm';
+						} else if (modelId.toLowerCase().includes('gb') || modelId.toLowerCase().includes('gradient')) {
+							modelType = 'gb';
+						}
+					} catch {
+						// Legacy string format
+						if (storedModel.toLowerCase().includes('svm')) {
+							modelType = 'svm';
+						} else if (storedModel.toLowerCase().includes('gb') || storedModel.toLowerCase().includes('gradient')) {
+							modelType = 'gb';
+						}
+					}
+				}
+
+				// Map dataset selection to API data parameter
+				let dataType = 'kepler'; // default
+				if (selectedDataset === 'tess-candidates') {
+					dataType = 'tess';
+				} else if (selectedDataset === 'kepler-validated') {
+					dataType = 'kepler';
+				}
+
+				// Build the prediction payload for preloaded data
+				const payload = {
+					model: modelType,
+					datasource: 'pre-loaded',
+					data: dataType,
+					predict: true
+				};
+
+				console.log('Making ML preloaded prediction request with payload:', payload);
+
+				const response = await fetch('/api/ml-predict', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(payload),
+				});
+
+				if (!response.ok) {
+					const errorData = await response.json();
+					throw new Error(errorData.error || errorData.details || `API request failed with status ${response.status}`);
+				}
+
+				const result = await response.json();
+				console.log('ML preloaded prediction result:', result);
+				
+				// Store the result for the results page
+				const mlResult = {
+					candidate_probability: result.candidate_probability,
+					non_candidate_probability: result.non_candidate_probability,
+					model_used: modelType.toUpperCase(),
+					datasource: 'pre-loaded',
+					data_type: dataType,
+					individual_predictions: {
+						first: result.first,
+						second: result.second,
+						third: result.third,
+						fourth: result.fourth,
+						fifth: result.fifth,
+						sixth: result.sixth,
+						seventh: result.seventh,
+						eighth: result.eighth,
+						ninth: result.ninth,
+						tenth: result.tenth
+					}
+				};
+				
+				sessionStorage.setItem('dlPredictionResult', JSON.stringify(mlResult));
+				sessionStorage.setItem('mlModelType', modelType);
+				sessionStorage.setItem('selectedDataset', selectedDataset);
+				
+				// Navigate to results
+				router.push('/dashboard/playground/results');
+
+			} catch (err) {
+				console.error('ML preloaded prediction error:', err);
+				const errorMessage = err instanceof Error ? err.message : 'Failed to get ML prediction';
+				
+				// Check if it's a connection issue
+				if (errorMessage.includes('Cannot connect') || 
+					errorMessage.includes('ECONNREFUSED') ||
+					errorMessage.includes('fetch') || 
+					errorMessage.includes('network')) {
+					setError('Cannot connect to ML prediction service. Please ensure the service is running on localhost:8000');
+				} else if (errorMessage.includes('timeout')) {
+					setError('Prediction request timed out. Please try again.');
+				} else {
+					setError(errorMessage);
+				}
+			}
 		} else {
 			// For other modes, proceed normally
 			router.push('/dashboard/playground/results');
