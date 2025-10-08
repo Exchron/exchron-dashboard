@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 // API proxy for external DL models (CNN/DNN) prediction service
-// Calls external API at http://localhost:8000/api/dl/predict
-const EXTERNAL_API_URL = 'http://localhost:8000/api/dl/predict';
+// Calls external API at http://138.2.111.78:8000/api/dl/predict
+const EXTERNAL_API_URL = 'http://138.2.111.78:8000/api/dl/predict';
 
 export const dynamic = 'force-dynamic';
 

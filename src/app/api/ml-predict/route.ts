@@ -105,7 +105,7 @@ export async function POST(request: Request) {
 		}
 
 		// Make request to external ML API
-		const endpoint = 'http://localhost:8000/api/ml/predict';
+		const endpoint = 'http://138.2.111.78:8000/api/ml/predict';
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
@@ -213,7 +213,7 @@ export async function POST(request: Request) {
 			errorMessage = 'Prediction request timed out';
 			statusCode = 504;
 		} else if (isConnectionError) {
-			errorMessage = 'Cannot connect to ML prediction service. Please ensure the service is running on localhost:8000';
+			errorMessage = 'Cannot connect to ML prediction service. Please ensure the service is running on http://138.2.111.78:8000';
 			statusCode = 503;
 		}
 

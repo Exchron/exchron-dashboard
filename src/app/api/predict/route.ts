@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 
 // Simple proxy to backend prediction API to avoid direct browser fetch issues (CORS / network)
 // Environment variable override: PREDICT_API_URL (server-side) or NEXT_PUBLIC_PREDICT_API (client hint)
-// Fallback default: http://localhost:8000/predict
-const DEFAULT_ENDPOINT = 'http://localhost:8000/predict';
+// Fallback default: http://138.2.111.78:8000/predict
+const DEFAULT_ENDPOINT = 'http://138.2.111.78:8000/health';
 
 export const dynamic = 'force-dynamic';
 
