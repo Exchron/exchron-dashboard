@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardTitle, CardContent } from '../../ui/Card';
 import { ActionButton } from '../../ui/ActionButton';
 import { usePrediction } from '../predictioncontext';
@@ -12,15 +12,61 @@ function formatPercent(v: number | undefined) {
 
 export default function ResultsTab() {
 	const { predictions, status, error } = usePrediction();
+	
+	// Check for DL model results
+	const [dlPredictionResult, setDlPredictionResult] = useState<any>(null);
+	const [selectedModel, setSelectedModel] = useState<any>(null);
+	const [selectedKeplerId, setSelectedKeplerId] = useState<string | null>(null);
+
+	// Load DL prediction result from session storage
+	useEffect(() => {
+		const storedResult = sessionStorage.getItem('dlPredictionResult');
+		const storedKeplerId = sessionStorage.getItem('selectedKeplerId');
+		const storedModel = localStorage.getItem('selectedModel');
+		
+		if (storedResult) {
+			try {
+				setDlPredictionResult(JSON.parse(storedResult));
+			} catch (e) {
+				console.error('Failed to parse DL prediction result:', e);
+			}
+		}
+		
+		if (storedKeplerId) {
+			setSelectedKeplerId(storedKeplerId);
+		}
+		
+		if (storedModel) {
+			try {
+				const parsed = JSON.parse(storedModel);
+				setSelectedModel(parsed);
+			} catch {
+				setSelectedModel({ id: storedModel, name: storedModel });
+			}
+		}
+	}, []);
+
 	const first = predictions[0] as any;
-	const prediction = first
-		? {
-				exoplanet: first.probability_confirmed,
-				not: first.probability_false_positive,
-				label: first.backend_label,
-				confidence: first.confidence,
-		  }
-		: { exoplanet: 0, not: 0, label: null, confidence: null };
+	let prediction;
+
+	// Use DL prediction result if available, otherwise use regular predictions
+	if (dlPredictionResult) {
+		prediction = {
+			exoplanet: dlPredictionResult.candidate_probability,
+			not: dlPredictionResult.non_candidate_probability,
+			label: dlPredictionResult.model_used,
+			confidence: null,
+		};
+	} else {
+		prediction = first
+			? {
+					exoplanet: first.probability_confirmed,
+					not: first.probability_false_positive,
+					label: first.backend_label,
+					confidence: first.confidence,
+			  }
+			: { exoplanet: 0, not: 0, label: null, confidence: null };
+	}
 
 	const types = [
 		{ label: 'Hot Jupiter', pct: 60, tone: 'text-[var(--success-color)]' },
@@ -32,12 +78,107 @@ export default function ResultsTab() {
 	const [exoplanetTypeLocked, setExoplanetTypeLocked] = useState(true);
 	const [habitabilityLocked, setHabitabilityLocked] = useState(true);
 
+	const hasResults = predictions.length > 0 || dlPredictionResult;
+
 	return (
 		<div className="flex flex-col space-y-8">
+			{/* Show DL Model Info if DL prediction result exists */}
+			{dlPredictionResult && (
+				<Card className="border border-[var(--input-border)]">
+					<CardTitle>Deep Learning Model Results</CardTitle>
+					<CardContent>
+						<div className="flex flex-col items-center gap-4">
+							{selectedModel && (
+								<div className="text-center">
+									<p className="text-sm text-[var(--text-secondary)] mb-2">
+										Model: <span className="font-medium">{selectedModel.name || selectedModel.id}</span>
+									</p>
+									{selectedKeplerId && (
+										<p className="text-sm text-[var(--text-secondary)]">
+											Kepler ID: <span className="font-mono font-medium">{selectedKeplerId}</span>
+										</p>
+									)}
+								</div>
+							)}
+							
+							<div className="w-full max-w-2xl">
+								<div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+									<p className="text-sm text-green-800 font-medium">
+										✓ Prediction completed successfully
+									</p>
+								</div>
+								
+								{dlPredictionResult.lightcurve_link && (
+									<div className="space-y-2 text-sm">
+										<p className="font-medium">Additional Resources:</p>
+										<div className="space-y-1">
+											{dlPredictionResult.lightcurve_link && (
+												<a 
+													href={dlPredictionResult.lightcurve_link}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="block text-blue-600 hover:underline"
+												>
+													→ Light Curve Data
+												</a>
+											)}
+											{dlPredictionResult.target_pixel_file_link && (
+												<a 
+													href={dlPredictionResult.target_pixel_file_link}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="block text-blue-600 hover:underline"
+												>
+													→ Target Pixel File
+												</a>
+											)}
+											{dlPredictionResult.dv_report_link && (
+												<a 
+													href={dlPredictionResult.dv_report_link}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="block text-blue-600 hover:underline"
+												>
+													→ Data Validation Report
+												</a>
+											)}
+										</div>
+									</div>
+								)}
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+			)}
+
+			{/* No Results Message */}
+			{!hasResults && (
+				<Card className="border border-[var(--input-border)]">
+					<CardContent className="py-12">
+						<div className="text-center">
+							<p className="text-lg text-[var(--text-secondary)] mb-4">
+								No prediction results available.
+							</p>
+							<p className="text-sm text-[var(--text-secondary)] mb-6">
+								Please go back to the Data Input tab and run an evaluation first.
+							</p>
+							<ActionButton
+								href="/dashboard/playground/data-input"
+								icon="arrow-left"
+								ariaLabel="Go to Data Input"
+							>
+								Back to Data Input
+							</ActionButton>
+						</div>
+					</CardContent>
+				</Card>
+			)}
+
 			{/* Prediction Section */}
-			<Card className="border border-[var(--input-border)]">
-				<CardTitle>Prediction</CardTitle>
-				<CardContent>
+			{hasResults && (
+				<Card className="border border-[var(--input-border)]">
+					<CardTitle>Prediction Results</CardTitle>
+					<CardContent>
 					<div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 						{/* Centered probability cards */}
 						<div className="lg:col-span-12 flex flex-col md:flex-row md:items-stretch gap-5 md:justify-center">
@@ -164,6 +305,7 @@ export default function ResultsTab() {
 					</div>
 				</CardContent>
 			</Card>
+			)}
 
 			{/* Other Reports & Validation Results */}
 			<Card className="border border-[var(--input-border)] overflow-hidden">

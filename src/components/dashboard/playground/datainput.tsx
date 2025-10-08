@@ -43,7 +43,7 @@ interface UploadStatus {
 
 export default function DataInputTab() {
 	const router = useRouter();
-	const { setLoading, setError, setResults } = usePrediction();
+	const { setLoading, setError, clearError, setResults, status, error } = usePrediction();
 
 	// View mode persistence
 	const [viewMode, setViewMode] = React.useState<ViewMode | null>('preloaded');
@@ -308,9 +308,84 @@ export default function DataInputTab() {
 		selectedDataset,
 	]);
 
-	const handleEvaluate = () => {
+	const handleEvaluate = async () => {
 		if (!isReady) return; // guard
-		router.push('/dashboard/playground/results');
+		
+		// For DL models (CNN/DNN), make API request here
+		if (isRestrictedModel && keplerIdValid && keplerIdInput.trim()) {
+			setLoading();
+			
+			try {
+				// Extract model type from selected model
+				let modelType = 'cnn'; // default
+				const storedModel = localStorage.getItem('selectedModel');
+				if (storedModel) {
+					try {
+						const parsed = JSON.parse(storedModel);
+						const modelId = parsed.id || storedModel;
+						if (modelId.includes('dnn')) {
+							modelType = 'dnn';
+						} else if (modelId.includes('cnn')) {
+							modelType = 'cnn';
+						}
+					} catch {
+						// Legacy string format
+						if (storedModel.toLowerCase().includes('dnn')) {
+							modelType = 'dnn';
+						}
+					}
+				}
+
+				const payload = {
+					model: modelType,
+					kepid: keplerIdInput.trim(),
+					predict: true
+				};
+
+				console.log('Making DL prediction request with payload:', payload);
+
+				const response = await fetch('/api/dl-predict', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(payload),
+				});
+
+				if (!response.ok) {
+					const errorData = await response.json();
+					throw new Error(errorData.error || `API request failed with status ${response.status}`);
+				}
+
+				const result = await response.json();
+				console.log('DL prediction result:', result);
+				
+				// Store the result for the results page
+				sessionStorage.setItem('dlPredictionResult', JSON.stringify(result));
+				sessionStorage.setItem('selectedKeplerId', keplerIdInput.trim());
+				
+				// Navigate to results
+				router.push('/dashboard/playground/results');
+
+			} catch (err) {
+				console.error('DL prediction error:', err);
+				const errorMessage = err instanceof Error ? err.message : 'Failed to get DL prediction';
+				
+				// Check if it's a connection/uptime issue or if API returned uptime message
+				if (errorMessage.includes('fetch') || 
+					errorMessage.includes('network') || 
+					errorMessage.includes('timeout') ||
+					errorMessage.includes('uptime isn\'t 100% guaranteed') ||
+					errorMessage.includes('free services')) {
+					setError('Sorry, we are using free services therefore uptime isn\'t 100% guaranteed. Please check back later.');
+				} else {
+					setError(errorMessage);
+				}
+			}
+		} else {
+			// For other models, proceed normally
+			router.push('/dashboard/playground/results');
+		}
 	};
 
 	const allDatasetCards = [
@@ -1123,34 +1198,106 @@ export default function DataInputTab() {
 			{(viewMode === 'manual' ||
 				viewMode === 'upload' ||
 				viewMode === 'preloaded') && (
-				<div className="fixed bottom-6 right-6 z-20">
-					<button
-						onClick={handleEvaluate}
-						aria-label={isReady ? 'Evaluate Results' : 'Select input source'}
-						disabled={!isReady}
-						className={`rounded-full px-5 py-3 font-semibold text-sm shadow-[0px_0px_8px_1px_rgba(0,0,0,0.10)] transition flex items-center gap-2 ${
-							isReady
-								? 'bg-black text-white hover:opacity-90'
-								: 'bg-[var(--input-background)] text-[var(--text-secondary)] border border-[var(--input-border)] cursor-not-allowed'
-						}`}
-					>
-						<span>{isReady ? 'Evaluate' : 'Select Input Source'}</span>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							strokeWidth={2}
-							stroke="currentColor"
-							className="w-4 h-4"
+				<>
+					{/* Error display */}
+					{error && (
+						<div className="fixed bottom-24 right-6 z-20 max-w-md">
+							<div className="bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
+								<div className="flex items-start gap-3">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0"
+										fill="none"
+										viewBox="0 0 24 24"
+										strokeWidth={2}
+										stroke="currentColor"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+										/>
+									</svg>
+									<div className="flex-1">
+										<p className="text-sm text-red-800 font-medium mb-1">
+											Prediction Failed
+										</p>
+										<p className="text-sm text-red-700">{error}</p>
+									</div>
+									<button
+										onClick={clearError}
+										className="text-red-400 hover:text-red-600 transition-colors"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											className="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											strokeWidth={2}
+											stroke="currentColor"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												d="M6 18L18 6M6 6l12 12"
+											/>
+										</svg>
+									</button>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{/* Action button */}
+					<div className="fixed bottom-6 right-6 z-20">
+						<button
+							onClick={handleEvaluate}
+							aria-label={
+								status === 'loading' 
+									? 'Processing...' 
+									: isReady 
+									? 'Evaluate Results' 
+									: 'Select input source'
+							}
+							disabled={!isReady || status === 'loading'}
+							className={`rounded-full px-5 py-3 font-semibold text-sm shadow-[0px_0px_8px_1px_rgba(0,0,0,0.10)] transition flex items-center gap-2 ${
+								status === 'loading'
+									? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+									: isReady
+									? 'bg-black text-white hover:opacity-90'
+									: 'bg-[var(--input-background)] text-[var(--text-secondary)] border border-[var(--input-border)] cursor-not-allowed'
+							}`}
 						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								d="M17.25 8.25L21 12m0 0l-3.75 3.75M21 12H3"
-							/>
-						</svg>
-					</button>
-				</div>
+							{status === 'loading' ? (
+								<>
+									<svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+										<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+										<path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+									<span>Processing...</span>
+								</>
+							) : (
+								<>
+									<span>{isReady ? 'Evaluate' : 'Select Input Source'}</span>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+										strokeWidth={2}
+										stroke="currentColor"
+										className="w-4 h-4"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											d="M17.25 8.25L21 12m0 0l-3.75 3.75M21 12H3"
+										/>
+									</svg>
+								</>
+							)}
+						</button>
+					</div>
+				</>
 			)}
 		</div>
 	);

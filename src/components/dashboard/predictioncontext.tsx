@@ -38,6 +38,7 @@ interface PredictionContextValue {
 	predictions: ModelPredictionResult[];
 	setLoading: () => void;
 	setError: (msg: string) => void;
+	clearError: () => void;
 	setResults: (
 		records: ModelInputRecord[],
 		predictions: ModelPredictionResult[],
@@ -68,6 +69,10 @@ export const PredictionProvider: React.FC<{ children: React.ReactNode }> = ({
 		setErrorState(msg);
 	}, []);
 
+	const clearError = useCallback(() => {
+		setErrorState(null);
+	}, []);
+
 	const setResults = useCallback(
 		(records: ModelInputRecord[], preds: ModelPredictionResult[]) => {
 			setInputRecords(records);
@@ -94,6 +99,7 @@ export const PredictionProvider: React.FC<{ children: React.ReactNode }> = ({
 				predictions,
 				setLoading,
 				setError,
+				clearError,
 				setResults,
 				reset,
 			}}

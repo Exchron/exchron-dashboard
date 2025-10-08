@@ -362,11 +362,44 @@ export class NeuralNetworkService {
 			throw new Error('Model not trained. Train a model first.');
 		}
 
+		// Check if feature stats are available
+		const featureNames = Object.keys(this.featureStats);
+		if (featureNames.length === 0) {
+			throw new Error('Feature statistics not available. Model may not be properly trained.');
+		}
+
+		// Validate feature dimensions
+		if (features.length === 0) {
+			throw new Error('No features provided for prediction.');
+		}
+
+		const expectedFeatureCount = featureNames.length;
+		const actualFeatureCount = features[0]?.length || 0;
+		
+		if (actualFeatureCount !== expectedFeatureCount) {
+			throw new Error(
+				`Feature dimension mismatch. Expected ${expectedFeatureCount} features, got ${actualFeatureCount}. ` +
+				`Expected features: ${featureNames.join(', ')}`
+			);
+		}
+
 		// Normalize features using stored statistics
 		const normalizedFeatures = features.map((row) =>
 			row.map((value, i) => {
-				const featureName = Object.keys(this.featureStats)[i];
-				const { mean, std } = this.featureStats[featureName];
+				const featureName = featureNames[i];
+				const featureStats = this.featureStats[featureName];
+				
+				if (!featureStats) {
+					throw new Error(`Feature statistics not found for feature: ${featureName}`);
+				}
+				
+				const { mean, std } = featureStats;
+				
+				// Handle edge case where std is 0 (constant feature)
+				if (std === 0) {
+					return 0;
+				}
+				
 				return (value - mean) / std;
 			}),
 		);
