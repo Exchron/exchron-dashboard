@@ -2,7 +2,7 @@
 // Adjust BACKEND_BASE via env NEXT_PUBLIC_BACKEND_BASE if needed.
 
 const BACKEND_BASE =
-	process.env.NEXT_PUBLIC_BACKEND_BASE || 'http://localhost:8000';
+	process.env.NEXT_PUBLIC_BACKEND_BASE || 'http://138.2.111.78:8000';
 
 export interface BackendSinglePredictionResponse {
 	model_name: string;

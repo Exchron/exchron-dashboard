@@ -577,7 +577,7 @@ export default function DataInputTab() {
 					errorMessage.includes('ECONNREFUSED') ||
 					errorMessage.includes('fetch') || 
 					errorMessage.includes('network')) {
-					setError('Cannot connect to ML prediction service. Please ensure the service is running on localhost:8000');
+					setError('Cannot connect to ML prediction service. Please ensure the service is running on http://138.2.111.78:8000');
 				} else if (errorMessage.includes('timeout')) {
 					setError('Prediction request timed out. Please try again.');
 				} else {
@@ -699,7 +699,7 @@ export default function DataInputTab() {
 					errorMessage.includes('ECONNREFUSED') ||
 					errorMessage.includes('fetch') || 
 					errorMessage.includes('network')) {
-					setError('Cannot connect to ML prediction service. Please ensure the service is running on localhost:8000');
+					setError('Cannot connect to ML prediction service. Please ensure the service is running on http://138.2.111.78:8000');
 				} else if (errorMessage.includes('timeout')) {
 					setError('Prediction request timed out. Please try again.');
 				} else {
@@ -804,7 +804,7 @@ export default function DataInputTab() {
 					errorMessage.includes('ECONNREFUSED') ||
 					errorMessage.includes('fetch') || 
 					errorMessage.includes('network')) {
-					setError('Cannot connect to ML prediction service. Please ensure the service is running on localhost:8000');
+					setError('Cannot connect to ML prediction service. Please ensure the service is running on http://138.2.111.78:8000');
 				} else if (errorMessage.includes('timeout')) {
 					setError('Prediction request timed out. Please try again.');
 				} else {

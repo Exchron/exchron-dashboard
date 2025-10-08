@@ -7,7 +7,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 // Provides shared state between Data Input (upload) and Results pages.
 // Flow:
 // 1. User selects Data Upload mode and chooses a CSV.
-// 2. On Evaluate, CSV parsed to records -> POST http://localhost:8000/predict { records }
+// 2. On Evaluate, CSV parsed to records -> POST http://138.2.111.78:8000/predict { records }
 // 3. API expected to return an array (or {results: [...]}) where each element
 //    has probability_confirmed and probability_false_positive (0..1 floats).
 // 4. Results stored here and consumed in ResultsTab for display.
