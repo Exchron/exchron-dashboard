@@ -311,6 +311,52 @@ export default function ResultsTab() {
 			<Card className="border border-[var(--input-border)] overflow-hidden">
 				<CardTitle>Other Reports & Validation Results</CardTitle>
 				<CardContent className="p-4">
+					{/* DV Report PDF Embed */}
+					{dlPredictionResult && dlPredictionResult.dv_report_link && (
+						<div className="mb-8">
+							<h3 className="font-semibold mb-3 text-sm tracking-wide uppercase text-[var(--text-secondary)]">
+								Data Validation Report
+							</h3>
+							<div className="border border-[var(--input-border)] rounded-lg overflow-hidden bg-white">
+								<iframe
+									src={dlPredictionResult.dv_report_link}
+									className="w-full h-96"
+									title="Data Validation Report"
+									sandbox="allow-scripts allow-same-origin"
+								/>
+								<div className="p-3 bg-[var(--hover-background)] border-t border-[var(--input-border)]">
+									<div className="flex items-center justify-between">
+										<span className="text-sm text-[var(--text-secondary)]">
+											Data Validation Report for Kepler ID: {selectedKeplerId}
+										</span>
+										<a
+											href={dlPredictionResult.dv_report_link}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+										>
+											Open Full Report
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												className="h-3 w-3"
+												fill="none"
+												viewBox="0 0 24 24"
+												strokeWidth={2}
+												stroke="currentColor"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+												/>
+											</svg>
+										</a>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+
 					{predictions.length > 0 && (
 						<div className="mb-8">
 							<h3 className="font-semibold mb-3 text-sm tracking-wide uppercase text-[var(--text-secondary)]">
@@ -349,108 +395,219 @@ export default function ResultsTab() {
 							</div>
 						</div>
 					)}
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-						<div className="bg-[var(--placeholder-color)] h-[240px] w-full rounded-lg flex items-center justify-center border border-[var(--input-border)]">
-							<div className="text-sm p-4 h-full w-full overflow-auto">
-								<div className="mb-4">
-									<h4 className="font-bold">Signal Quality</h4>
-									<p>Stellar Noise: Good</p>
-									<p>SNR: 7.4</p>
-									<p>Duration: 6h 42m</p>
-									<p>False Positive Probability: &lt; 1%</p>
-								</div>
-								<div className="mb-4">
-									<h4 className="font-bold">Parameter Uncertainties</h4>
-									<p>Orbital Period: ±0.02 days</p>
-									<p>Planet Radius: ±0.12 R⊕</p>
-								</div>
-								<div>
-									<h4 className="font-bold">Statistical Metrics</h4>
-									<p>F1 Score: 0.92</p>
-									<p>Precision: 0.94</p>
-									<p>Recall: 0.89</p>
-								</div>
-							</div>
-						</div>
-						<div className="bg-[var(--placeholder-color)] h-[240px] w-full rounded-lg flex items-center justify-center border border-[var(--input-border)]">
-							<div className="text-sm p-4 h-full w-full overflow-auto">
-								<div className="mb-4">
-									<h4 className="font-bold">Estimation Results</h4>
-									<p>Orbital Period: 9.7 days</p>
-									<p>Planet Radius: 2.1 R⊕</p>
-									<p>Stellar Radius: 0.8 R☉</p>
-									<p>Transit Depth: 0.17%</p>
-								</div>
-								<div className="mb-4">
-									<h4 className="font-bold">Model Confidence</h4>
-									<p>Overall: High</p>
-									<p>
-										Feature Importance: Transit Shape (45%), Period (30%),
-										Stellar (25%)
-									</p>
-								</div>
-								<div>
-									<h4 className="font-bold">Follow-up</h4>
-									<p>RV Confirmation: High Priority</p>
-									<p>Atmospheric Characterization: Medium Priority</p>
-								</div>
-							</div>
-						</div>
-						<div className="bg-[var(--placeholder-color)] h-[240px] w-full rounded-lg flex items-center justify-center border border-[var(--input-border)]">
-							<div className="text-xs p-4 h-full w-full overflow-auto">
-								<div className="mb-4">
-									<h4 className="font-bold">Spectra Analysis</h4>
-									<p>H2O (3.2σ), CH4 (2.1σ)</p>
-									<p>Temperature: 280K ± 40K</p>
-									<p>Model: ATMO v2.1</p>
-								</div>
-								<div className="mb-4">
-									<h4 className="font-bold">Imaging Analysis</h4>
-									<p>Source: TESS Sector 14</p>
-									<p>Background Contamination: Low</p>
-									<p>Nearest Neighbor: 4.2"</p>
-								</div>
-								<div>
-									<h4 className="font-bold">Binary Checks</h4>
-									<p>Eclipsing Binary: Passed</p>
-									<p>Centroid: Clean</p>
-								</div>
-							</div>
-						</div>
-						<div className="bg-[var(--placeholder-color)] h-[240px] w-full rounded-lg flex items-center justify-center border border-[var(--input-border)]">
-							<div className="text-xs p-4 h-full w-full overflow-auto">
-								<div className="mb-4">
-									<h4 className="font-bold">Transit Parameters</h4>
-									<p>Duration: 3.2 h</p>
-									<p>Impact Parameter: 0.4 ± 0.1</p>
-									<p>Limb Darkening: u1=0.3, u2=0.2</p>
-								</div>
-								<div className="mb-4">
-									<h4 className="font-bold">Derived Parameters</h4>
-									<p>Insolation: 1.2 S⊕</p>
-									<p>Semi-major Axis: 0.08 AU</p>
-									<p>Equilibrium Temp: 290K</p>
-								</div>
-								<div>
-									<h4 className="font-bold">System Architecture</h4>
-									<p>Other Known Planets: 0</p>
-									<p>System Age: 2.1 ± 0.8 Gyr</p>
-								</div>
-							</div>
-						</div>
-					</div>
 				</CardContent>
 			</Card>
-
 			{/* Open Source / Resources Section */}
 			<Card className="border border-[var(--input-border)]">
 				<CardTitle>Resources for Follow-up Research</CardTitle>
 				<CardContent>
-					<div className="flex flex-col items-center justify-center text-center py-10 gap-6">
-						<h3 className="font-bold text-base tracking-tight">
-							use these resources to find out more about your exoplanet and
+					<div className="text-center mb-8">
+						<h3 className="font-bold text-base tracking-tight mb-2">
+							Use these resources to find out more about your exoplanet and
 							confirm your results
 						</h3>
+						<p className="text-sm text-[var(--text-secondary)]">
+							Access official NASA databases and exoplanet research tools
+						</p>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<a
+							href="https://exoplanetarchive.ipac.caltech.edu/"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="group p-4 border border-[var(--input-border)] rounded-lg hover:border-black transition-colors bg-white"
+						>
+							<div className="flex items-start gap-3">
+								<div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										className="w-5 h-5 text-blue-600"
+										fill="none"
+										viewBox="0 0 24 24"
+										strokeWidth={2}
+										stroke="currentColor"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+										/>
+									</svg>
+								</div>
+								<div className="flex-1">
+									<h4 className="font-semibold text-sm mb-1 group-hover:text-black transition-colors">
+										NASA Exoplanet Archive
+									</h4>
+									<p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+										Comprehensive database of confirmed exoplanets and candidate objects from various surveys
+									</p>
+								</div>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-black transition-colors"
+									fill="none"
+									viewBox="0 0 24 24"
+									strokeWidth={2}
+									stroke="currentColor"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+									/>
+								</svg>
+							</div>
+						</a>
+
+						<a
+							href="https://eyes.nasa.gov/apps/exo/"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="group p-4 border border-[var(--input-border)] rounded-lg hover:border-black transition-colors bg-white"
+						>
+							<div className="flex items-start gap-3">
+								<div className="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										className="w-5 h-5 text-purple-600"
+										fill="none"
+										viewBox="0 0 24 24"
+										strokeWidth={2}
+										stroke="currentColor"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+										/>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+										/>
+									</svg>
+								</div>
+								<div className="flex-1">
+									<h4 className="font-semibold text-sm mb-1 group-hover:text-black transition-colors">
+										NASA Eyes on Exoplanets
+									</h4>
+									<p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+										Interactive 3D visualization tool to explore confirmed exoplanets and their characteristics
+									</p>
+								</div>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-black transition-colors"
+									fill="none"
+									viewBox="0 0 24 24"
+									strokeWidth={2}
+									stroke="currentColor"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+									/>
+								</svg>
+							</div>
+						</a>
+
+						<a
+							href="https://archive.stsci.edu/kepler/"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="group p-4 border border-[var(--input-border)] rounded-lg hover:border-black transition-colors bg-white"
+						>
+							<div className="flex items-start gap-3">
+								<div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										className="w-5 h-5 text-green-600"
+										fill="none"
+										viewBox="0 0 24 24"
+										strokeWidth={2}
+										stroke="currentColor"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+										/>
+									</svg>
+								</div>
+								<div className="flex-1">
+									<h4 className="font-semibold text-sm mb-1 group-hover:text-black transition-colors">
+										Kepler Data Archive
+									</h4>
+									<p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+										Access original Kepler mission data including light curves and target pixel files
+									</p>
+								</div>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-black transition-colors"
+									fill="none"
+									viewBox="0 0 24 24"
+									strokeWidth={2}
+									stroke="currentColor"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+									/>
+								</svg>
+							</div>
+						</a>
+
+						<a
+							href="https://science.nasa.gov/exoplanets/"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="group p-4 border border-[var(--input-border)] rounded-lg hover:border-black transition-colors bg-white"
+						>
+							<div className="flex items-start gap-3">
+								<div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										className="w-5 h-5 text-red-600"
+										fill="none"
+										viewBox="0 0 24 24"
+										strokeWidth={2}
+										stroke="currentColor"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+										/>
+									</svg>
+								</div>
+								<div className="flex-1">
+									<h4 className="font-semibold text-sm mb-1 group-hover:text-black transition-colors">
+										NASA Exoplanet Exploration
+									</h4>
+									<p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+										Latest news, discoveries, and educational resources about exoplanet science
+									</p>
+								</div>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-black transition-colors"
+									fill="none"
+									viewBox="0 0 24 24"
+									strokeWidth={2}
+									stroke="currentColor"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+									/>
+								</svg>
+							</div>
+						</a>
 					</div>
 				</CardContent>
 			</Card>
@@ -458,9 +615,10 @@ export default function ResultsTab() {
 			{/* Bottom right action buttons */}
 			<div className="fixed bottom-8 right-8 z-20 flex gap-4">
 				<ActionButton
-					onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+					href="/dashboard/playground/overview"
 					icon="arrow-left"
 					variant="secondary"
+					ariaLabel="Go back to Overview"
 				>
 					Classify Another
 				</ActionButton>
