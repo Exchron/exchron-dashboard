@@ -110,3 +110,51 @@ input[type="range"].slider::-moz-range-thumb {
 	border: 2px solid #fff;
 	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
+/* Tutorial overlay styles */
+.tutorial-overlay {
+	backdrop-filter: blur(8px);
+	background: rgba(255, 255, 255, 0.1);
+}
+
+/* Tutorial content animation */
+@keyframes tutorialSlideIn {
+	from {
+		opacity: 0;
+		transform: translateY(20px) scale(0.95);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.tutorial-content {
+	animation: tutorialSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Tutorial responsive adjustments */
+@media (max-width: 768px) {
+	.tutorial-content {
+		margin: 1rem;
+		max-height: 90vh;
+	}
+}
+
+/* Custom scrollbar for tutorial content */
+.tutorial-content::-webkit-scrollbar {
+	width: 6px;
+}
+
+.tutorial-content::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.tutorial-content::-webkit-scrollbar-thumb {
+	background: var(--input-border);
+	border-radius: 3px;
+}
+
+.tutorial-content::-webkit-scrollbar-thumb:hover {
+	background: var(--muted-text);
+}

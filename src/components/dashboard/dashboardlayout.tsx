@@ -5,6 +5,7 @@ import TabNavigation from './tabnavigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { AIChatPopup } from '../ui/AIChatPopup';
+import { Tutorial } from '../ui/Tutorial';
 import { PredictionProvider } from './predictioncontext';
 import AiImg from '../../../assets/logos/ai.png';
 import exchronLogo from '../../../assets/Logo.png';
@@ -22,6 +23,7 @@ export default function DashboardLayout({
 }: DashboardLayoutProps) {
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 	const [isChatOpen, setIsChatOpen] = useState(false);
+	const [isTutorialOpen, setIsTutorialOpen] = useState(false);
 	const [chatAnchorEl, setChatAnchorEl] = useState<HTMLButtonElement | null>(
 		null,
 	);
@@ -46,6 +48,10 @@ export default function DashboardLayout({
 		setIsChatOpen(false);
 	};
 
+	const handleCloseTutorial = () => {
+		setIsTutorialOpen(false);
+	};
+
 	// Initialize mode from props, localStorage, or URL path
 	useEffect(() => {
 		// Clear any existing selections on app start
@@ -54,6 +60,13 @@ export default function DashboardLayout({
 			localStorage.removeItem('selectedModel');
 			localStorage.removeItem('selectedDataInput');
 			sessionStorage.setItem('appInitialized', 'true');
+		}
+
+		// Check if tutorial should be shown for first-time users
+		const tutorialCompleted = localStorage.getItem('tutorialCompleted');
+		if (!tutorialCompleted && isInitialLoad) {
+			// Only show tutorial on first load, not on every page navigation
+			setIsTutorialOpen(true);
 		}
 
 		if (mode) {
@@ -247,6 +260,37 @@ export default function DashboardLayout({
 								</svg>
 							</p>
 						</a>
+
+						{/* Tutorial */}
+						<div
+							className="bg-[var(--input-background)] border border-[var(--input-border)] rounded-xl p-4 mb-4 cursor-pointer hover:bg-[var(--hover-background)] transition-colors select-none"
+							role="button"
+							tabIndex={0}
+							onClick={() => setIsTutorialOpen(true)}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									setIsTutorialOpen(true);
+								}
+							}}
+							aria-label="Show tutorial"
+						>
+							<p className="text-sm flex items-center justify-between">
+								Show Tutorial
+								<svg
+									className="w-5 h-5"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+								>
+									<path
+										fillRule="evenodd"
+										d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+										clipRule="evenodd"
+									/>
+								</svg>
+							</p>
+						</div>
 
 						{/* Contact */}
 						<div
@@ -555,6 +599,11 @@ export default function DashboardLayout({
 					/>
 				</div>
 			</div>
+			
+			<Tutorial 
+				isOpen={isTutorialOpen}
+				onClose={handleCloseTutorial}
+			/>
 		</PredictionProvider>
 	);
 }
