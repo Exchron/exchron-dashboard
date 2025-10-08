@@ -103,22 +103,22 @@ export default function DashboardLayout({
 			}
 		}
 
-			// Load selected model and data input method from localStorage
-			const savedModel = localStorage.getItem('selectedModel');
-			if (savedModel) {
-				try {
-					const parsed = JSON.parse(savedModel);
-					setSelectedModel(parsed);
-				} catch (e) {
-					// Ignore parsing errors, clear invalid data
-					localStorage.removeItem('selectedModel');
-				}
+		// Load selected model and data input method from localStorage
+		const savedModel = localStorage.getItem('selectedModel');
+		if (savedModel) {
+			try {
+				const parsed = JSON.parse(savedModel);
+				setSelectedModel(parsed);
+			} catch (e) {
+				// Ignore parsing errors, clear invalid data
+				localStorage.removeItem('selectedModel');
 			}
+		}
 
-			const savedDataInput = localStorage.getItem('selectedDataInput');
-			if (savedDataInput) {
-				setSelectedDataInput(savedDataInput);
-			}		// Set up a storage event listener to sync across tabs/components
+		const savedDataInput = localStorage.getItem('selectedDataInput');
+		if (savedDataInput) {
+			setSelectedDataInput(savedDataInput);
+		} // Set up a storage event listener to sync across tabs/components
 		const handleStorageChange = (e: StorageEvent) => {
 			if (e.key === 'selectedModel' && e.newValue) {
 				try {
@@ -156,7 +156,10 @@ export default function DashboardLayout({
 
 		return () => {
 			window.removeEventListener('storage', handleStorageChange);
-			window.removeEventListener('localStorageChange', handleCustomStorageChange);
+			window.removeEventListener(
+				'localStorageChange',
+				handleCustomStorageChange,
+			);
 		};
 	}, [mode]);
 
@@ -242,7 +245,8 @@ export default function DashboardLayout({
 								<span className="font-medium">Learn more about exoplanets</span>
 							</h3>
 							<p className="text-sm text-[var(--text-neutral)] leading-relaxed">
-								Explore how exoplanets are found and classified — from detection methods to diverse planet types.
+								Explore how exoplanets are found and classified — from detection
+								methods to diverse planet types.
 							</p>
 							<p className="mt-3 text-sm font-semibold text-[var(--muted-text)] flex items-center gap-1">
 								<span>Visit our leaning platform</span>
@@ -388,169 +392,36 @@ export default function DashboardLayout({
 								</div>
 							)}
 						</div>
-
-					{/* Status Display - Shows progress bar for Classroom mode, selections for Playground */}
-					{selectedMode === 'Classroom' ? (
-						<div className="flex items-center justify-center">
-							<div className="flex items-center space-x-2 md:space-x-4 bg-white px-6 py-3 rounded-xl shadow-sm">
-								{/* Data Input */}
-								<div className="flex items-center">
-									<div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-										['data-input'].includes(activeTab) 
-											? 'bg-black text-white' 
-											: ['model-selection', 'train-validate', 'test-export'].includes(activeTab)
-												? 'bg-black text-white' 
-												: 'bg-[#E6E7E9] text-gray-500'
-									}`}>
-										{['model-selection', 'train-validate', 'test-export'].includes(activeTab) ? (
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												className="w-5 h-5"
-												viewBox="0 0 20 20"
-												fill="currentColor"
-											>
-												<path
-													fillRule="evenodd"
-													d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-													clipRule="evenodd"
-												/>
-											</svg>
-										) : (
-											<span className="text-sm font-bold">1</span>
-										)}
+						{/* Status Display - Shows progress bar for Classroom mode, selections for Playground */}
+						{selectedMode === 'Classroom' ? null : selectedModel ||
+						  selectedDataInput ? (
+							<div className="flex items-center gap-4">
+								{selectedModel && (
+									<div className="flex flex-col items-center">
+										<span className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wide mb-1">
+											Model
+										</span>
+										<span className="text-lg font-semibold text-black">
+											{selectedModel?.name || selectedModel?.short}
+										</span>
 									</div>
-									<span className={`ml-2 text-sm font-medium ${
-										['data-input'].includes(activeTab) ? '' : 'text-gray-500'
-									}`}>
-										Data Input
-									</span>
-								</div>
-
-								{/* Connector Line */}
-								<div className={`w-8 h-0.5 ${
-									['model-selection', 'train-validate', 'test-export'].includes(activeTab) ? 'bg-black' : 'bg-[#E6E7E9]'
-								}`}></div>
-
-								{/* Model Selection */}
-								<div className="flex items-center">
-									<div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-										['model-selection'].includes(activeTab) 
-											? 'bg-black text-white' 
-											: ['train-validate', 'test-export'].includes(activeTab)
-												? 'bg-black text-white' 
-												: 'bg-[#E6E7E9] text-gray-500'
-									}`}>
-										{['train-validate', 'test-export'].includes(activeTab) ? (
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												className="w-5 h-5"
-												viewBox="0 0 20 20"
-												fill="currentColor"
-											>
-												<path
-													fillRule="evenodd"
-													d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-													clipRule="evenodd"
-												/>
-											</svg>
-										) : (
-											<span className="text-sm font-bold">2</span>
-										)}
+								)}
+								{selectedModel && selectedDataInput && (
+									<div className="w-px h-12 bg-[var(--input-border)]"></div>
+								)}
+								{selectedDataInput && (
+									<div className="flex flex-col items-center">
+										<span className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wide mb-1">
+											Data Input
+										</span>
+										<span className="text-lg font-semibold text-black">
+											{selectedDataInput}
+										</span>
 									</div>
-									<span className={`ml-2 text-sm font-medium ${
-										['model-selection'].includes(activeTab) ? '' : 'text-gray-500'
-									}`}>
-										Model Selection
-									</span>
-								</div>
-
-								{/* Connector Line */}
-								<div className={`w-8 h-0.5 ${
-									['train-validate', 'test-export'].includes(activeTab) ? 'bg-black' : 'bg-[#E6E7E9]'
-								}`}></div>
-
-								{/* Train & Validate */}
-								<div className="flex items-center">
-									<div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-										['train-validate'].includes(activeTab) 
-											? 'bg-black text-white' 
-											: ['test-export'].includes(activeTab)
-												? 'bg-black text-white' 
-												: 'bg-[#E6E7E9] text-gray-500'
-									}`}>
-										{['test-export'].includes(activeTab) ? (
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												className="w-5 h-5"
-												viewBox="0 0 20 20"
-												fill="currentColor"
-											>
-												<path
-													fillRule="evenodd"
-													d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-													clipRule="evenodd"
-												/>
-											</svg>
-										) : (
-											<span className="text-sm font-bold">3</span>
-										)}
-									</div>
-									<span className={`ml-2 text-sm font-medium ${
-										['train-validate'].includes(activeTab) ? '' : 'text-gray-500'
-									}`}>
-										Train & Validate
-									</span>
-								</div>
-
-								{/* Connector Line */}
-								<div className={`w-8 h-0.5 ${
-									['test-export'].includes(activeTab) ? 'bg-black' : 'bg-[#E6E7E9]'
-								}`}></div>
-
-								{/* Test & Export */}
-								<div className="flex items-center">
-									<div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-										['test-export'].includes(activeTab) 
-											? 'bg-black text-white' 
-											: 'bg-[#E6E7E9] text-gray-500'
-									}`}>
-										<span className="text-sm font-bold">4</span>
-									</div>
-									<span className={`ml-2 text-sm font-medium ${
-										['test-export'].includes(activeTab) ? '' : 'text-gray-500'
-									}`}>
-										Test & Export
-									</span>
-								</div>
+								)}
 							</div>
-						</div>
-					) : (selectedModel || selectedDataInput) ? (
-						<div className="flex items-center gap-4">
-							{selectedModel && (
-								<div className="flex flex-col items-center">
-									<span className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wide mb-1">
-										Model
-									</span>
-									<span className="text-lg font-semibold text-black">
-										{selectedModel?.name || selectedModel?.short}
-									</span>
-								</div>
-							)}
-							{selectedModel && selectedDataInput && (
-								<div className="w-px h-12 bg-[var(--input-border)]"></div>
-							)}
-							{selectedDataInput && (
-								<div className="flex flex-col items-center">
-									<span className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wide mb-1">
-										Data Input
-									</span>
-									<span className="text-lg font-semibold text-black">
-										{selectedDataInput}
-									</span>
-								</div>
-							)}
-						</div>
-					) : null}						<div className="flex gap-3">
+						) : null}{' '}
+						<div className="flex gap-3">
 							{/* Documentation link */}
 							<Link
 								href="https://docs.exchronai.earth/"
@@ -589,6 +460,193 @@ export default function DashboardLayout({
 
 					{/* Main content - Add padding top to account for fixed header */}
 					<main className="flex-1 px-6 pt-28 py-4 text-[var(--text-base)]">
+						{/* Classroom workflow progress - moved below header */}
+						{selectedMode === 'Classroom' && (
+							<div className="-mt-2 mb-4 flex items-center justify-center">
+								<div className="flex items-center space-x-2 md:space-x-4 bg-white px-6 py-3 rounded-xl shadow-sm">
+									{/* Data Input */}
+									<div className="flex items-center">
+										<div
+											className={`w-8 h-8 rounded-full flex items-center justify-center ${
+												['data-input'].includes(activeTab)
+													? 'bg-black text-white'
+													: [
+															'model-selection',
+															'train-validate',
+															'test-export',
+													  ].includes(activeTab)
+													? 'bg-black text-white'
+													: 'bg-[#E6E7E9] text-gray-500'
+											}`}
+										>
+											{[
+												'model-selection',
+												'train-validate',
+												'test-export',
+											].includes(activeTab) ? (
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													className="w-5 h-5"
+													viewBox="0 0 20 20"
+													fill="currentColor"
+												>
+													<path
+														fillRule="evenodd"
+														d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+														clipRule="evenodd"
+													/>
+												</svg>
+											) : (
+												<span className="text-sm font-bold">1</span>
+											)}
+										</div>
+										<span
+											className={`ml-2 text-sm font-medium ${
+												['data-input'].includes(activeTab)
+													? ''
+													: 'text-gray-500'
+											}`}
+										>
+											Data Input
+										</span>
+									</div>
+
+									{/* Connector Line */}
+									<div
+										className={`w-8 h-0.5 ${
+											[
+												'model-selection',
+												'train-validate',
+												'test-export',
+											].includes(activeTab)
+												? 'bg-black'
+												: 'bg-[#E6E7E9]'
+										}`}
+									></div>
+
+									{/* Model Selection */}
+									<div className="flex items-center">
+										<div
+											className={`w-8 h-8 rounded-full flex items-center justify-center ${
+												['model-selection'].includes(activeTab)
+													? 'bg-black text-white'
+													: ['train-validate', 'test-export'].includes(
+															activeTab,
+													  )
+													? 'bg-black text-white'
+													: 'bg-[#E6E7E9] text-gray-500'
+											}`}
+										>
+											{['train-validate', 'test-export'].includes(activeTab) ? (
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													className="w-5 h-5"
+													viewBox="0 0 20 20"
+													fill="currentColor"
+												>
+													<path
+														fillRule="evenodd"
+														d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+														clipRule="evenodd"
+													/>
+												</svg>
+											) : (
+												<span className="text-sm font-bold">2</span>
+											)}
+										</div>
+										<span
+											className={`ml-2 text-sm font-medium ${
+												['model-selection'].includes(activeTab)
+													? ''
+													: 'text-gray-500'
+											}`}
+										>
+											Model Selection
+										</span>
+									</div>
+
+									{/* Connector Line */}
+									<div
+										className={`w-8 h-0.5 ${
+											['train-validate', 'test-export'].includes(activeTab)
+												? 'bg-black'
+												: 'bg-[#E6E7E9]'
+										}`}
+									></div>
+
+									{/* Train & Validate */}
+									<div className="flex items-center">
+										<div
+											className={`w-8 h-8 rounded-full flex items-center justify-center ${
+												['train-validate'].includes(activeTab)
+													? 'bg-black text-white'
+													: ['test-export'].includes(activeTab)
+													? 'bg-black text-white'
+													: 'bg-[#E6E7E9] text-gray-500'
+											}`}
+										>
+											{['test-export'].includes(activeTab) ? (
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													className="w-5 h-5"
+													viewBox="0 0 20 20"
+													fill="currentColor"
+												>
+													<path
+														fillRule="evenodd"
+														d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+														clipRule="evenodd"
+													/>
+												</svg>
+											) : (
+												<span className="text-sm font-bold">3</span>
+											)}
+										</div>
+										<span
+											className={`ml-2 text-sm font-medium ${
+												['train-validate'].includes(activeTab)
+													? ''
+													: 'text-gray-500'
+											}`}
+										>
+											Train & Validate
+										</span>
+									</div>
+
+									{/* Connector Line */}
+									<div
+										className={`w-8 h-0.5 ${
+											['test-export'].includes(activeTab)
+												? 'bg-black'
+												: 'bg-[#E6E7E9]'
+										}`}
+									></div>
+
+									{/* Test & Export */}
+									<div className="flex items-center">
+										<div
+											className={`w-8 h-8 rounded-full flex items-center justify-center ${
+												['test-export'].includes(activeTab)
+													? 'bg-black text-white'
+													: 'bg-[#E6E7E9] text-gray-500'
+											}`}
+										>
+											<span className="text-sm font-bold">4</span>
+										</div>
+										<span
+											className={`ml-2 text-sm font-medium ${
+												['test-export'].includes(activeTab)
+													? ''
+													: 'text-gray-500'
+											}`}
+										>
+											Test & Export
+										</span>
+									</div>
+								</div>
+							</div>
+						)}
+
 						{children}
 					</main>
 
@@ -599,11 +657,8 @@ export default function DashboardLayout({
 					/>
 				</div>
 			</div>
-			
-			<Tutorial 
-				isOpen={isTutorialOpen}
-				onClose={handleCloseTutorial}
-			/>
+
+			<Tutorial isOpen={isTutorialOpen} onClose={handleCloseTutorial} />
 		</PredictionProvider>
 	);
 }
