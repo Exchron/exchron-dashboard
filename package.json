@@ -29,5 +29,9 @@
 		"tailwindcss": "^4",
 		"typescript": "^5",
 		"@types/jszip": "3.4.1"
-	}
+	},
+	"allowScripts": {
+  		"esbuild": true,
+  		"sharp": true
+	},
 }
